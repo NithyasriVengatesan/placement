@@ -43,3 +43,11 @@ def get_drive_collection():
 
 def get_application_collection():
     return db["applications"]
+
+
+def get_faculty_account_collection():
+    return db["faculty_accounts"]
+
+
+def get_student_account_collection():
+    return db["student_accounts"]

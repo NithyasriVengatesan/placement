@@ -7,6 +7,9 @@ from .views import (
     dashboard_overview,
     department_dashboard_overview,
     department_placement_list_create,
+    faculty_account_delete,
+    faculty_account_list_create,
+    faculty_password_change,
     health_check,
     hiring_list,
     internship_list,
@@ -14,6 +17,9 @@ from .views import (
     logout_view,
     placement_details_content,
     star_student_list_create,
+    student_account_approve,
+    student_account_list_create,
+    student_password_change,
     student_list_create,
 )
 
@@ -35,6 +41,28 @@ urlpatterns = [
         "dashboard/department-placement/",
         department_placement_list_create,
         name="department-placement-list-create",
+    ),
+    path("faculty-accounts/", faculty_account_list_create, name="faculty-account-list-create"),
+    path(
+        "faculty-accounts/change-password/",
+        faculty_password_change,
+        name="faculty-password-change",
+    ),
+    path("student-accounts/", student_account_list_create, name="student-account-list-create"),
+    path(
+        "student-accounts/<str:student_account_id>/approve/",
+        student_account_approve,
+        name="student-account-approve",
+    ),
+    path(
+        "student-accounts/change-password/",
+        student_password_change,
+        name="student-password-change",
+    ),
+    path(
+        "faculty-accounts/<str:faculty_id>/",
+        faculty_account_delete,
+        name="faculty-account-delete",
     ),
     path("portal/placement-details/", placement_details_content, name="placement-details-content"),
     path("portal/internships/", internship_list, name="internship-list"),

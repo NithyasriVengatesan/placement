@@ -60,6 +60,7 @@ class StudentApiTests(APITestCase):
         mock_save_uploaded_file.return_value = "/media/student_uploads/test/file.pdf"
         mock_create_student.return_value = {
             "id": "abc123",
+            "classAdvisor": "Mrs. Meena",
             "firstName": "Nithya",
             "lastName": "S",
             "regno": "RIT2026001",
@@ -69,6 +70,7 @@ class StudentApiTests(APITestCase):
         }
 
         form_payload = {
+            "classAdvisor": "Mrs. Meena",
             "firstName": "Nithya",
             "lastName": "S",
             "department": "CSE",

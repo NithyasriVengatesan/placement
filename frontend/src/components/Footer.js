@@ -39,7 +39,7 @@ target="_blank"
 rel="noopener noreferrer"
 >
 
-Department of AI & ML Team of RAMCO INSTITUTE OF TECHNOLOGY, RAJAPALAYAM
+ Department of AI & ML Team of RAMCO INSTITUTE OF TECHNOLOGY, RAJAPALAYAM
 
 </a>
 

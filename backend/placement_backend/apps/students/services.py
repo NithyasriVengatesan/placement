@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from bson import ObjectId
 from pymongo.errors import PyMongoError
 
 from .mongodb import (
@@ -8,10 +9,12 @@ from .mongodb import (
     get_company_collection,
     get_department_placement_collection,
     get_drive_collection,
+    get_faculty_account_collection,
     get_hiring_collection,
     get_internship_collection,
     get_portal_content_collection,
     get_star_students_collection,
+    get_student_account_collection,
     get_student_collection,
 )
 
@@ -24,15 +27,228 @@ def _serialize_student(document):
     return serialized
 
 
+def _serialize_faculty_account(document):
+    serialized = dict(document)
+    serialized["id"] = str(serialized.pop("_id"))
+    if "created_at" in serialized and serialized["created_at"] is not None:
+        serialized["created_at"] = serialized["created_at"].isoformat()
+    if "updated_at" in serialized and serialized["updated_at"] is not None:
+        serialized["updated_at"] = serialized["updated_at"].isoformat()
+    serialized.pop("password", None)
+    return serialized
+
+
+def _serialize_student_account(document):
+    serialized = dict(document)
+    serialized["id"] = str(serialized.pop("_id"))
+    if "created_at" in serialized and serialized["created_at"] is not None:
+        serialized["created_at"] = serialized["created_at"].isoformat()
+    if "updated_at" in serialized and serialized["updated_at"] is not None:
+        serialized["updated_at"] = serialized["updated_at"].isoformat()
+    serialized.pop("password", None)
+    return serialized
+
+
 def create_student(payload):
     collection = get_student_collection()
+    regno = str(payload.get("regno", "")).strip()
+    existing_document = collection.find_one({"regno": regno}) if regno else None
+    timestamp = datetime.now(timezone.utc)
+
+    if existing_document:
+        updated_document = {
+            **existing_document,
+            **payload,
+            "created_at": existing_document.get("created_at", timestamp),
+            "updated_at": timestamp,
+        }
+        collection.update_one({"_id": existing_document["_id"]}, {"$set": updated_document})
+        saved_document = collection.find_one({"_id": existing_document["_id"]})
+        return _serialize_student(saved_document)
+
     document = {
         **payload,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": timestamp,
     }
     result = collection.insert_one(document)
     created_document = collection.find_one({"_id": result.inserted_id})
     return _serialize_student(created_document)
+
+
+def create_faculty_account(payload):
+    collection = get_faculty_account_collection()
+    faculty_name = str(payload.get("name", "")).strip()
+    document = {
+        **payload,
+        "fac_username": faculty_name,
+        "password": "1234",
+        "must_change_password": True,
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = collection.insert_one(document)
+    created_document = collection.find_one({"_id": result.inserted_id})
+    return _serialize_faculty_account(created_document)
+
+
+def list_faculty_accounts(department=None):
+    try:
+        collection = get_faculty_account_collection()
+        query = {}
+        if department:
+            query["department"] = department
+        faculty_accounts = collection.find(query).sort("created_at", -1)
+        return [_serialize_faculty_account(account) for account in faculty_accounts]
+    except PyMongoError:
+        return []
+
+
+def delete_faculty_account(faculty_id):
+    try:
+        collection = get_faculty_account_collection()
+        object_id = ObjectId(faculty_id)
+        account = collection.find_one({"_id": object_id})
+        if not account:
+            return False
+
+        collection.delete_one({"_id": object_id})
+        return True
+    except (PyMongoError, TypeError, ValueError):
+        return False
+
+
+def authenticate_faculty_account(username, password):
+    try:
+        collection = get_faculty_account_collection()
+        account = collection.find_one({"fac_username": str(username).strip()})
+        if not account:
+            return None, "Invalid faculty username or password."
+
+        if account.get("password") != password:
+            return None, "Invalid faculty username or password."
+
+        return account, None
+    except PyMongoError:
+        return None, "Unable to verify faculty credentials."
+
+
+def update_faculty_password(username, new_password):
+    try:
+        collection = get_faculty_account_collection()
+        account = collection.find_one({"fac_username": str(username).strip()})
+        if not account:
+            return None
+
+        collection.update_one(
+            {"_id": account["_id"]},
+            {
+                "$set": {
+                    "password": new_password,
+                    "must_change_password": False,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+        )
+        updated_account = collection.find_one({"_id": account["_id"]})
+        return _serialize_faculty_account(updated_account)
+    except PyMongoError:
+        return None
+
+
+def create_student_account(payload):
+    collection = get_student_account_collection()
+    regno = str(payload.get("regno", "")).strip().upper()
+    department = str(payload.get("department", "")).strip()
+    existing_account = collection.find_one({"regno": regno})
+    if existing_account:
+        raise ValueError("A student account already exists for this register number.")
+
+    document = {
+        "regno": regno,
+        "username": regno,
+        "password": "12345678",
+        "must_change_password": True,
+        "department": department,
+        "approval_status": "pending",
+        "added_by": str(payload.get("addedBy", "")).strip(),
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = collection.insert_one(document)
+    created_document = collection.find_one({"_id": result.inserted_id})
+    return _serialize_student_account(created_document)
+
+
+def list_student_accounts(department=None, approval_status=None):
+    try:
+        collection = get_student_account_collection()
+        query = {}
+        if department:
+            query["department"] = department
+        if approval_status:
+            query["approval_status"] = approval_status
+        student_accounts = collection.find(query).sort("created_at", -1)
+        return [_serialize_student_account(account) for account in student_accounts]
+    except PyMongoError:
+        return []
+
+
+def authenticate_student_account(username, password):
+    try:
+        collection = get_student_account_collection()
+        account = collection.find_one({"username": str(username).strip().upper()})
+        if not account:
+            return None, "Invalid register number or password."
+        if account.get("approval_status") != "approved":
+            return None, "Your account is awaiting HOD approval."
+        if account.get("password") != password:
+            return None, "Invalid register number or password."
+        return account, None
+    except PyMongoError:
+        return None, "Unable to verify student credentials."
+
+
+def update_student_password(username, new_password):
+    try:
+        collection = get_student_account_collection()
+        account = collection.find_one({"username": str(username).strip().upper()})
+        if not account:
+            return None
+        collection.update_one(
+            {"_id": account["_id"]},
+            {
+                "$set": {
+                    "password": new_password,
+                    "must_change_password": False,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+        )
+        updated_account = collection.find_one({"_id": account["_id"]})
+        return _serialize_student_account(updated_account)
+    except PyMongoError:
+        return None
+
+
+def approve_student_account(student_account_id, approved_by=""):
+    try:
+        collection = get_student_account_collection()
+        object_id = ObjectId(student_account_id)
+        account = collection.find_one({"_id": object_id})
+        if not account:
+            return None
+        collection.update_one(
+            {"_id": object_id},
+            {
+                "$set": {
+                    "approval_status": "approved",
+                    "approved_by": str(approved_by).strip(),
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+        )
+        updated_account = collection.find_one({"_id": object_id})
+        return _serialize_student_account(updated_account)
+    except (PyMongoError, TypeError, ValueError):
+        return None
 
 
 def list_students():
@@ -42,6 +258,17 @@ def list_students():
         return [_serialize_student(student) for student in students]
     except PyMongoError:
         return []
+
+
+def get_student_by_regno(regno):
+    try:
+        collection = get_student_collection()
+        student = collection.find_one({"regno": str(regno).strip()})
+        if not student:
+            return None
+        return _serialize_student(student)
+    except PyMongoError:
+        return None
 
 
 def _safe_float(value):

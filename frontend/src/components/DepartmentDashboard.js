@@ -112,6 +112,21 @@ function DepartmentDashboard({
               </ul>
             </article>
           </section>
+
+          <section className="dashboard-card">
+            <div className="admin-card-headline">
+              <div>
+                <h3>CSE Department Page</h3>
+                <p>
+                  Open the first dedicated department page built from the official
+                  Computer Science and Engineering department details.
+                </p>
+              </div>
+              <button type="button" onClick={() => onNavigate("department:cse:overview")}>
+                Open CSE Page
+              </button>
+            </div>
+          </section>
         </>
       )}
     </PortalLayout>

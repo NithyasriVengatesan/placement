@@ -3,13 +3,33 @@ import "../App.css";
 import Header from "./Header";
 import Footer from "./Footer";
 
-const navigationItems = [
+export const navigationItems = [
   { key: "home", label: "Home" },
   { key: "placement-details", label: "Placement Details" },
   { key: "interns", label: "Interns" },
   { key: "hirings", label: "Hirings" },
   { key: "contact", label: "Contact Us" },
 ];
+
+export function PortalSubnav({ currentPage, onNavigate, onOpenStudentForm }) {
+  return (
+    <div className="subnav">
+      <div className="subnav-inner">
+        {navigationItems.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={`subnav-link ${currentPage === item.key ? "active" : ""}`}
+            onClick={() => onNavigate(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+        <button onClick={onOpenStudentForm}>4th Year Form</button>
+      </div>
+    </div>
+  );
+}
 
 function PortalLayout({
   currentPage,
@@ -31,21 +51,11 @@ function PortalLayout({
         hideAuthControls={hideHeaderAuth}
       />
 
-      <div className="subnav">
-        <div className="subnav-inner">
-          {navigationItems.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`subnav-link ${currentPage === item.key ? "active" : ""}`}
-              onClick={() => onNavigate(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
-          <button onClick={onOpenStudentForm}>4th Year Form</button>
-        </div>
-      </div>
+      <PortalSubnav
+        currentPage={currentPage}
+        onNavigate={onNavigate}
+        onOpenStudentForm={onOpenStudentForm}
+      />
 
       <main className="main-content">
         <div className={`container ${contentClassName}`.trim()}>{children}</div>

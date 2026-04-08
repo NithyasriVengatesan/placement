@@ -25,6 +25,7 @@ class LanguageSerializer(serializers.Serializer):
 
 
 class StudentSerializer(serializers.Serializer):
+    classAdvisor = serializers.CharField()
     firstName = serializers.CharField()
     lastName = serializers.CharField()
     department = serializers.CharField()
@@ -152,7 +153,48 @@ class DepartmentPlacementSerializer(serializers.Serializer):
     female = serializers.IntegerField(min_value=0)
 
 
+class FacultyAccountSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    degree = serializers.CharField()
+    position = serializers.CharField()
+    department = serializers.CharField()
+
+
+class FacultyPasswordChangeSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    newPassword = serializers.CharField()
+    confirmPassword = serializers.CharField()
+
+    def validate(self, attrs):
+        if attrs["newPassword"] != attrs["confirmPassword"]:
+            raise serializers.ValidationError(
+                {"confirmPassword": "New password and confirm password must match."}
+        )
+        return attrs
+
+
+class StudentAccountSerializer(serializers.Serializer):
+    regno = serializers.CharField()
+    department = serializers.CharField()
+    addedBy = serializers.CharField(required=False, allow_blank=True)
+
+
+class StudentPasswordChangeSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    newPassword = serializers.CharField()
+    confirmPassword = serializers.CharField()
+
+    def validate(self, attrs):
+        if attrs["newPassword"] != attrs["confirmPassword"]:
+            raise serializers.ValidationError(
+                {"confirmPassword": "New password and confirm password must match."}
+            )
+        return attrs
+
+
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField()
-    loginType = serializers.ChoiceField(choices=["admin", "department"])
+    loginType = serializers.ChoiceField(
+        choices=["admin", "hod", "faculty", "mentor", "student", "department"]
+    )

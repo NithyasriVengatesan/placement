@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import "../App.css";
 import Header from "./Header";
 import Footer from "./Footer";
@@ -8,72 +8,30 @@ import LoginVisualPanel from "./LoginVisualPanel";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 
-function LoginPage({
+function HodLoginPage({
   onBack,
   onLoginSuccess,
   onNavigate,
   onOpenStudentForm,
-  initialPortalType = "admin",
-  initialDepartmentRole = "hod",
   initialDepartmentKey = "",
-  studentOnly = false,
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [credentials, setCredentials] = useState({
     username: "",
     password: "",
-    portalType: initialPortalType,
-    departmentRole: initialDepartmentRole,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const departmentContent = getDepartmentContent(initialDepartmentKey);
-  const isLockedDepartmentRole =
-    initialPortalType === "department" &&
-    ["faculty", "mentor"].includes(initialDepartmentRole) &&
-    !studentOnly;
-  const pageTitle = studentOnly
-    ? "Student Login"
-    : isLockedDepartmentRole
-      ? `${initialDepartmentRole.charAt(0).toUpperCase()}${initialDepartmentRole.slice(1)} Login`
-      : "Login";
-  const submitLabel = studentOnly
-    ? "Login as Student"
-    : isLockedDepartmentRole
-      ? `Login as ${initialDepartmentRole.charAt(0).toUpperCase()}${initialDepartmentRole.slice(1)}`
-      : credentials.portalType === "admin"
-        ? "Login as Admin"
-        : "Login as Department";
 
   const handleChange = (field, value) => {
     setCredentials((prev) => ({ ...prev, [field]: value }));
   };
 
-  useEffect(() => {
-    setCredentials((prev) => ({
-      ...prev,
-      portalType: initialPortalType,
-      departmentRole: initialDepartmentRole,
-    }));
-  }, [initialPortalType, initialDepartmentRole]);
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     setIsSubmitting(true);
     setErrorMessage("");
-
-    const payload = {
-      username: credentials.username,
-      password: credentials.password,
-      loginType:
-        studentOnly
-          ? "student"
-          : credentials.portalType === "admin"
-          ? "admin"
-          : isLockedDepartmentRole
-            ? initialDepartmentRole
-            : "department",
-    };
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login/`, {
@@ -82,12 +40,16 @@ function LoginPage({
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          username: credentials.username,
+          password: credentials.password,
+          loginType: "hod",
+        }),
       });
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.detail || "Login failed.");
+        throw new Error(data.detail || "HOD login failed.");
       }
 
       onLoginSuccess(data);
@@ -108,8 +70,8 @@ function LoginPage({
       />
       <main className="main-content">
         <div className="container">
-          <div className={`login-page-shell ${studentOnly && departmentContent ? "login-page-shell-student" : ""}`}>
-            {studentOnly && departmentContent ? (
+          <div className="login-page-shell hod-login-shell">
+            {departmentContent ? (
               <aside className="department-sidebar">
                 <div className="department-sidebar-card department-sidebar-card-compact">
                   <p className="department-sidebar-title">
@@ -122,77 +84,43 @@ function LoginPage({
                     Back to Department
                   </button>
                   <button type="button" className="department-nav-button active">
-                    Login
+                    HOD Login
                   </button>
                 </nav>
               </aside>
             ) : null}
 
-            <div className="login-card">
+            <div className="login-card hod-login-card">
               <LoginVisualPanel
-                title={studentOnly ? "Student Access" : isLockedDepartmentRole ? `${pageTitle}` : "Welcome back!"}
-                caption={
-                  studentOnly
-                    ? "Continue with your student credentials to access the placement workspace."
-                    : isLockedDepartmentRole
-                      ? `Use your ${initialDepartmentRole} credentials to continue into the department portal.`
-                      : "Choose your portal type and sign in to continue with placements, approvals, and student workflows."
-                }
+                title="HOD Access"
+                caption="Sign in to review approvals, faculty records, and department placement progress."
               />
 
               <div className="login-card-panel">
                 <button type="button" className="login-back-link" onClick={onBack}>
-                  Back to Portal
+                  Back to Department
                 </button>
-                <p className="login-tag">Placement Portal Access</p>
-                <h1>{pageTitle}</h1>
+                <p className="login-tag">Department Access</p>
+                <h1>HOD Login</h1>
                 <p className="login-copy">
-                  {studentOnly
-                    ? "Sign in using your register number and password."
-                    : isLockedDepartmentRole
-                      ? `Sign in using your ${initialDepartmentRole} username and password.`
-                      : "Choose the portal access type and sign in using your existing credentials."}
+                  Sign in using your HOD email address and password to access the
+                  department placement dashboard.
                 </p>
 
                 <form className="login-form" onSubmit={handleSubmit}>
-                  {!studentOnly && !isLockedDepartmentRole ? (
-                    <div className="login-type-toggle">
-                      <button
-                        type="button"
-                        className={`login-type-button ${
-                          credentials.portalType === "admin" ? "active" : ""
-                        }`}
-                        onClick={() => handleChange("portalType", "admin")}
-                      >
-                        Admin Login
-                      </button>
-                      <button
-                        type="button"
-                        className={`login-type-button ${
-                          credentials.portalType === "department" ? "active" : ""
-                        }`}
-                        onClick={() => handleChange("portalType", "department")}
-                      >
-                        Department Login
-                      </button>
-                    </div>
-                  ) : null}
-
-                  <label htmlFor="login-username">
-                    {studentOnly ? "Register Number" : "Username"}
-                  </label>
+                  <label htmlFor="hod-login-username">Username or Email</label>
                   <input
-                    id="login-username"
+                    id="hod-login-username"
                     type="text"
                     value={credentials.username}
                     onChange={(event) => handleChange("username", event.target.value)}
                     required
                   />
 
-                  <label htmlFor="login-password">Password</label>
+                  <label htmlFor="hod-login-password">Password</label>
                   <div className="password-field-wrap">
                     <input
-                      id="login-password"
+                      id="hod-login-password"
                       type={showPassword ? "text" : "password"}
                       value={credentials.password}
                       onChange={(event) => handleChange("password", event.target.value)}
@@ -232,7 +160,7 @@ function LoginPage({
                   {errorMessage ? <p className="login-error">{errorMessage}</p> : null}
 
                   <button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Signing in..." : submitLabel}
+                    {isSubmitting ? "Signing in..." : "Login as HOD"}
                   </button>
                 </form>
               </div>
@@ -245,4 +173,4 @@ function LoginPage({
   );
 }
 
-export default LoginPage;
+export default HodLoginPage;

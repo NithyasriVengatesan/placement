@@ -1,7 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import ProgressBar from "./components/ProgressBar";
-import Header from "./components/Header";
-import Footer from "./components/Footer";
 import "./App.css";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
@@ -9,6 +7,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 
 const initialFormData = {
+  classAdvisor: "",
   firstName: "",
   lastName: "",
   department: "",
@@ -117,13 +116,91 @@ const interestedDomainOptions = [
 
 const boardOptions = ["CBSE", "STATE BOARD", "MATRICULATION", "ICSE"];
 
-function StudentForm() {
+function StudentForm({ currentUser = null, existingStudent = null, onSuccess = null }) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(initialFormData);
   const [files, setFiles] = useState(initialFiles);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [profileRecord, setProfileRecord] = useState(existingStudent || null);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+
+  const mergeStudentProfile = useCallback((studentRecord) => {
+    if (!studentRecord) {
+      return;
+    }
+
+    setProfileRecord(studentRecord);
+    setFormData((prev) => ({
+      ...prev,
+      ...studentRecord,
+      languagesKnown:
+        studentRecord.languagesKnown?.length
+          ? studentRecord.languagesKnown
+          : prev.languagesKnown,
+      projects: studentRecord.projects?.length ? studentRecord.projects : prev.projects,
+      internships:
+        studentRecord.internships?.length ? studentRecord.internships : prev.internships,
+      certifications:
+        studentRecord.certifications?.length
+          ? studentRecord.certifications
+          : prev.certifications,
+      interestedDomains:
+        studentRecord.interestedDomains?.length
+          ? studentRecord.interestedDomains
+          : prev.interestedDomains,
+      regno: currentUser?.username || studentRecord.regno || prev.regno,
+      department: studentRecord.department || currentUser?.department || prev.department,
+    }));
+  }, [currentUser]);
+
+  useEffect(() => {
+    mergeStudentProfile(existingStudent);
+  }, [existingStudent, mergeStudentProfile]);
+
+  useEffect(() => {
+    if (!currentUser?.username || existingStudent) {
+      return;
+    }
+
+    let isMounted = true;
+    const fetchExistingProfile = async () => {
+      try {
+        setIsProfileLoading(true);
+        const response = await fetch(`${API_BASE_URL}/students/`);
+        if (!response.ok) {
+          throw new Error("Unable to load student profile.");
+        }
+
+        const studentRecords = await response.json();
+        const matchedProfile =
+          studentRecords.find(
+            (student) =>
+              String(student.regno || "").trim().toUpperCase() ===
+              String(currentUser.username || "").trim().toUpperCase()
+          ) || null;
+
+        if (isMounted && matchedProfile) {
+          mergeStudentProfile(matchedProfile);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setSubmitError(error.message || "Unable to load student profile.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsProfileLoading(false);
+        }
+      }
+    };
+
+    fetchExistingProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, existingStudent, mergeStudentProfile]);
 
   useEffect(() => {
     const semesterValues = [
@@ -265,7 +342,9 @@ function StudentForm() {
   };
 
   const validateForm = () => {
-    if (!formData.firstName || !formData.lastName || !formData.primaryEmail) {
+    const existingDocuments = existingStudent?.documents || {};
+
+    if (!formData.classAdvisor || !formData.firstName || !formData.lastName || !formData.primaryEmail) {
       return "Please complete the required details in Phase 1.";
     }
 
@@ -286,15 +365,27 @@ function StudentForm() {
       return "Phone numbers must contain exactly 10 digits.";
     }
 
-    if (!files.tenthMarksheet || !files.twelfthMarksheet || !files.collegeIdCard || !files.aadharCard) {
-      return "Please upload all required documents.";
+    if (!files.tenthMarksheet && !existingDocuments.tenthMarksheet) {
+      return "Please upload 10th marksheet.";
     }
 
-    if (!files.semesterMarksheets.length) {
+    if (!files.twelfthMarksheet && !existingDocuments.twelfthMarksheet) {
+      return "Please upload 12th marksheet.";
+    }
+
+    if (!files.collegeIdCard && !existingDocuments.collegeIdCard) {
+      return "Please upload college ID card.";
+    }
+
+    if (!files.aadharCard && !existingDocuments.aadharCard) {
+      return "Please upload aadhar card.";
+    }
+
+    if (!files.semesterMarksheets.length && !(existingDocuments.semesterMarksheets || []).length) {
       return "Please upload all semester marksheets.";
     }
 
-    if (formData.passportAvailability === "Yes" && !files.passportDocument) {
+    if (formData.passportAvailability === "Yes" && !files.passportDocument && !existingDocuments.passportDocument) {
       return "Please upload the passport PDF.";
     }
 
@@ -317,6 +408,15 @@ function StudentForm() {
       return;
     }
 
+    if (profileRecord) {
+      const confirmed = window.confirm(
+        "Are you sure you want to update your profile? This will replace your existing details in the backend."
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
     try {
       setIsSubmitting(true);
       setSubmitError("");
@@ -327,10 +427,18 @@ function StudentForm() {
       if (files.passportDocument) {
         payload.append("passportDocument", files.passportDocument);
       }
-      payload.append("tenthMarksheet", files.tenthMarksheet);
-      payload.append("twelfthMarksheet", files.twelfthMarksheet);
-      payload.append("collegeIdCard", files.collegeIdCard);
-      payload.append("aadharCard", files.aadharCard);
+      if (files.tenthMarksheet) {
+        payload.append("tenthMarksheet", files.tenthMarksheet);
+      }
+      if (files.twelfthMarksheet) {
+        payload.append("twelfthMarksheet", files.twelfthMarksheet);
+      }
+      if (files.collegeIdCard) {
+        payload.append("collegeIdCard", files.collegeIdCard);
+      }
+      if (files.aadharCard) {
+        payload.append("aadharCard", files.aadharCard);
+      }
       files.semesterMarksheets.forEach((file) => {
         payload.append("semesterMarksheets", file);
       });
@@ -351,6 +459,9 @@ function StudentForm() {
       setSubmitMessage("Form submitted successfully and stored in MongoDB.");
       alert("Form submitted successfully and stored in MongoDB.");
       console.log("Saved student:", data);
+      if (onSuccess) {
+        onSuccess(data);
+      }
     } catch (error) {
       console.error(error);
       setSubmitError(error.message || "Submission failed.");
@@ -385,6 +496,10 @@ function StudentForm() {
       <label>{label}</label>
       <select
         value={formData[field] ?? ""}
+        disabled={
+          (field === "department" && Boolean(currentUser?.department || profileRecord?.department)) ||
+          false
+        }
         onChange={(event) => updateField(field, event.target.value)}
       >
         <option value="" disabled>
@@ -408,107 +523,116 @@ function StudentForm() {
         multiple={multiple}
         onChange={multiple ? handleMultipleFileUpload : (event) => handleSingleFileUpload(field, event)}
       />
+      {!!profileRecord?.documents?.[field] && !multiple && (
+        <small className="portal-page-text">Existing file saved. Upload only if you want to replace it.</small>
+      )}
+      {!!profileRecord?.documents?.semesterMarksheets?.length && multiple && (
+        <small className="portal-page-text">
+          {profileRecord.documents.semesterMarksheets.length} semester marksheet file(s) already saved.
+          Upload new files only if you want to replace them.
+        </small>
+      )}
     </div>
   );
 
   return (
-    <div className="app-wrapper">
-      <Header />
+    <div className="student-form-page">
+      <h2>{profileRecord ? "Update Placement Registration" : "Placement Registration"}</h2>
+      {isProfileLoading && (
+        <p className="portal-page-text">Loading your saved profile details...</p>
+      )}
+      <ProgressBar step={step} />
 
-      <main className="main-content">
-        <div className="container">
-          <h2>Placement Registration</h2>
-          <ProgressBar step={step} />
-
-          {step === 1 && (
-            <div className="phase-card">
-              <h3>Basic Student Information</h3>
-              <div className="form-grid">
-                {renderInput("First Name", "firstName")}
-                {renderInput("Last Name (Initial at the back)", "lastName")}
-                {renderSelect(
-                  "Department",
-                  "department",
-                  departmentOptions,
-                  "Select Department"
-                )}
-                {renderSelect("Degree", "degree", ["B.E", "B.Tech"], "Select Degree")}
-                {renderSelect("Year", "year", ["3rd Year", "4th Year"], "Select Year")}
-                {renderInput("Date of Birth", "dob", {
-                  type: "date",
-                  onChange: handleDOBChange,
-                })}
-                {renderInput("Age", "age", { disabled: true })}
-                {renderSelect("Gender", "gender", ["Male", "Female"], "Select Gender")}
-                {renderSelect(
-                  "Blood Group",
-                  "blood",
-                  ["A+", "B+", "AB+", "AB-", "O+", "O-"],
-                  "Select Blood Group"
-                )}
-                {renderInput("Aadhar Number", "aadhar")}
-                <div className="form-group">
-                  <label>Passport Availability</label>
-                  <div className="domain-item">
-                    <label>
-                      <input
-                        type="radio"
-                        name="passportAvailability"
-                        value="Yes"
-                        checked={formData.passportAvailability === "Yes"}
-                        onChange={(event) =>
-                          updateField("passportAvailability", event.target.value)
-                        }
-                      />
-                      Yes
-                    </label>
-                    <label>
-                      <input
-                        type="radio"
-                        name="passportAvailability"
-                        value="No"
-                        checked={formData.passportAvailability === "No"}
-                        onChange={(event) =>
-                          updateField("passportAvailability", event.target.value)
-                        }
-                      />
-                      No
-                    </label>
-                  </div>
-                </div>
-                {formData.passportAvailability === "Yes" && (
-                  <div className="form-group">
-                    <label>Upload Passport PDF</label>
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      onChange={(event) => handleSingleFileUpload("passportDocument", event)}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <h4>Email Details</h4>
-              <div className="form-grid">
-                {renderInput("Primary Email", "primaryEmail", { type: "email" })}
-                {renderInput("Secondary Email", "secondaryEmail", { type: "email" })}
-              </div>
-
-              <h4>Contact Details</h4>
-              <div className="form-grid">
-                {renderInput("Phone Number", "phoneNumber")}
-                {renderInput("WhatsApp Number", "whatsappNumber")}
-                {renderInput("Residential Address", "residentialAddress", {
-                  textarea: true,
-                  fullWidth: true,
-                })}
-              </div>
-
-              <div className="form-navigation">
-                <button onClick={next}>Next</button>
+      {step === 1 && (
+        <div className="phase-card">
+          <h3>Basic Student Information</h3>
+          <div className="form-grid">
+            {renderInput("Class Advisor", "classAdvisor")}
+            {renderInput("First Name", "firstName")}
+            {renderInput("Last Name (Initial at the back)", "lastName")}
+            {renderSelect(
+              "Department",
+              "department",
+              departmentOptions,
+              "Select Department"
+            )}
+            {renderSelect("Degree", "degree", ["B.E", "B.Tech"], "Select Degree")}
+            {renderSelect("Year", "year", ["3rd Year", "4th Year"], "Select Year")}
+            {renderInput("Date of Birth", "dob", {
+              type: "date",
+              onChange: handleDOBChange,
+            })}
+            {renderInput("Age", "age", { disabled: true })}
+            {renderSelect("Gender", "gender", ["Male", "Female"], "Select Gender")}
+            {renderSelect(
+              "Blood Group",
+              "blood",
+              ["A+", "B+", "AB+", "AB-", "O+", "O-"],
+              "Select Blood Group"
+            )}
+            {renderInput("Aadhar Number", "aadhar")}
+            <div className="form-group">
+              <label>Passport Availability</label>
+              <div className="domain-item">
+                <label>
+                  <input
+                    type="radio"
+                    name="passportAvailability"
+                    value="Yes"
+                    checked={formData.passportAvailability === "Yes"}
+                    onChange={(event) =>
+                      updateField("passportAvailability", event.target.value)
+                    }
+                  />
+                  Yes
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="passportAvailability"
+                    value="No"
+                    checked={formData.passportAvailability === "No"}
+                    onChange={(event) =>
+                      updateField("passportAvailability", event.target.value)
+                    }
+                  />
+                  No
+                </label>
               </div>
             </div>
-          )}
+            {formData.passportAvailability === "Yes" && (
+              <div className="form-group">
+                <label>Upload Passport PDF</label>
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(event) => handleSingleFileUpload("passportDocument", event)}
+                />
+              </div>
+            )}
+          </div>
+
+          <h4>Email Details</h4>
+          <div className="form-grid">
+            {renderInput("Primary Email", "primaryEmail", { type: "email" })}
+            {renderInput("Secondary Email", "secondaryEmail", { type: "email" })}
+          </div>
+
+          <h4>Contact Details</h4>
+          <div className="form-grid">
+            {renderInput("Phone Number", "phoneNumber")}
+            {renderInput("WhatsApp Number", "whatsappNumber")}
+            {renderInput("Residential Address", "residentialAddress", {
+              textarea: true,
+              fullWidth: true,
+            })}
+          </div>
+
+          <div className="form-navigation">
+            <button onClick={next}>Next</button>
+          </div>
+        </div>
+      )}
 
           {step === 2 && (
             <div className="phase-card">
@@ -967,9 +1091,13 @@ function StudentForm() {
               >
                 <div className="form-grid">
                   {renderInput("Student Name", "firstName")}
-                  {renderInput("University Reg No", "regno")}
+                  {renderInput("University Reg No", "regno", {
+                    disabled: Boolean(currentUser?.username || profileRecord?.regno),
+                  })}
                   {renderInput("Batch", "batch")}
-                  {renderInput("Department", "department")}
+                  {renderInput("Department", "department", {
+                    disabled: Boolean(currentUser?.department || profileRecord?.department),
+                  })}
                 </div>
               </div>
 
@@ -1069,7 +1197,7 @@ function StudentForm() {
               <div className="form-navigation">
                 <button onClick={back}>Back</button>
                 <button onClick={handleSubmit} disabled={isSubmitting}>
-                  {isSubmitting ? "Submitting..." : "Submit"}
+                  {isSubmitting ? "Submitting..." : profileRecord ? "Update Profile" : "Submit"}
                 </button>
               </div>
 
@@ -1081,10 +1209,6 @@ function StudentForm() {
               )}
             </div>
           )}
-        </div>
-      </main>
-
-      <Footer />
     </div>
   );
 }
