@@ -7,7 +7,7 @@ const API_BASE_URL = "http://127.0.0.1:8000/api";
 
 const hodSections = [
   { key: "dashboard", label: "Dashboard" },
-  { key: "approvals", label: "Approvals" },
+  { key: "assign-mentor", label: "Faculty Roles" },
   { key: "faculty", label: "Faculty" },
   { key: "students", label: "Students" },
   { key: "reports", label: "Reports" },
@@ -35,16 +35,10 @@ function HodDashboard({
   const [loadError, setLoadError] = useState("");
   const [isFacultyLoading, setIsFacultyLoading] = useState(true);
   const [facultyLoadError, setFacultyLoadError] = useState("");
-  const [facultyForm, setFacultyForm] = useState({
-    name: "",
-    degree: "",
-    position: "",
-  });
   const [facultySubmitMessage, setFacultySubmitMessage] = useState("");
-  const [isSubmittingFaculty, setIsSubmittingFaculty] = useState(false);
   const [deletingFacultyId, setDeletingFacultyId] = useState("");
-  const [approvingStudentId, setApprovingStudentId] = useState("");
-  const [approvalMessage, setApprovalMessage] = useState("");
+  const [assignmentMessage, setAssignmentMessage] = useState("");
+  const [updatingStudentRegno, setUpdatingStudentRegno] = useState("");
 
   useEffect(() => {
     const loadDepartmentStudents = async () => {
@@ -89,12 +83,12 @@ function HodDashboard({
           { credentials: "include" }
         );
         if (!response.ok) {
-          throw new Error("Unable to load student approvals.");
+          throw new Error("Unable to load student accounts.");
         }
         const records = await response.json();
         setStudentAccounts(records);
       } catch (error) {
-        setApprovalMessage(error.message || "Unable to load student approvals.");
+        setAssignmentMessage(error.message || "Unable to load student accounts.");
       }
     };
 
@@ -169,9 +163,6 @@ function HodDashboard({
       mentorAssigned,
     };
   }, [students]);
-  const pendingStudentAccounts = studentAccounts.filter(
-    (account) => String(account.approval_status || "").toLowerCase() !== "approved"
-  );
 
   const hodRecord = facultyMembers[0];
   const buildHodPage = (section) => `hod:${departmentKey}:${section}`;
@@ -236,87 +227,224 @@ function HodDashboard({
       );
     }
 
-    if (activeSection === "approvals") {
+    if (activeSection === "assign-mentor") {
       return (
         <div className="hod-panel-stack">
           <section className="hod-surface-card">
             <div className="hod-surface-head">
               <div>
-                <p className="portal-page-tag">Approval Queue</p>
-                <h2>Student Profile Approvals</h2>
+                <p className="portal-page-tag">Faculty Access</p>
+                <h2>Assign Faculty Roles</h2>
                 <p className="portal-page-text">
-                  Review student login requests submitted by faculty for {content.title}.
+                  Configure role access for faculty members in this department. Once a role
+                  is assigned here, it will appear in the faculty switch-user menu after
+                  login.
                 </p>
               </div>
             </div>
           </section>
 
           <section className="hod-surface-card">
-            {approvalMessage ? <p className="portal-page-text">{approvalMessage}</p> : null}
+            {assignmentMessage ? <p className="portal-page-text">{assignmentMessage}</p> : null}
             <div className="admin-table-wrap">
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Register No</th>
-                    <th>Department</th>
-                    <th>Status</th>
-                    <th>Added By</th>
+                    <th>Faculty</th>
+                    <th>HOD</th>
+                    <th>Mentor</th>
+                    <th>Class Advisor</th>
+                    <th>Coordinator</th>
+                    <th>Class</th>
+                    <th>Section</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingStudentAccounts.length ? (
-                    pendingStudentAccounts.map((student) => (
-                      <tr key={student.id || student.username}>
-                        <td>{student.username}</td>
-                        <td>{student.department || "-"}</td>
-                        <td>{student.approval_status || "pending"}</td>
-                        <td>{student.added_by || "-"}</td>
+                  {facultyMembers.length ? (
+                    facultyMembers.map((member) => {
+                      const roles = new Set((member.roles || []).map((role) => String(role).trim().toLowerCase()));
+                      const requiresClassAssignment =
+                        roles.has("mentor") || roles.has("class_advisor");
+                      const roleCheckbox = (roleKey) => (
+                        <input
+                          type="checkbox"
+                          checked={roles.has(roleKey)}
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setFacultyMembers((current) =>
+                              current.map((item) => {
+                                if ((item.id || item.fac_username) !== (member.id || member.fac_username)) {
+                                  return item;
+                                }
+
+                                const nextRoles = new Set(
+                                  (item.roles || []).map((role) => String(role).trim().toLowerCase())
+                                );
+                                if (checked) {
+                                  nextRoles.add(roleKey);
+                                } else {
+                                  nextRoles.delete(roleKey);
+                                }
+
+                                nextRoles.add("faculty");
+                                const nextRequiresClassAssignment =
+                                  nextRoles.has("mentor") || nextRoles.has("class_advisor");
+
+                                return {
+                                  ...item,
+                                  roles: Array.from(nextRoles),
+                                  mentor:
+                                    roleKey === "mentor"
+                                      ? checked
+                                      : Array.from(nextRoles).includes("mentor"),
+                                  className: nextRequiresClassAssignment
+                                    ? item.className || ""
+                                    : "",
+                                  section: nextRequiresClassAssignment
+                                    ? item.section || ""
+                                    : "",
+                                };
+                              })
+                            );
+                          }}
+                        />
+                      );
+
+                      return (
+                      <tr key={member.id || member.fac_username}>
+                        <td>
+                          <div>
+                            <strong>{member.name || member.fac_username || "-"}</strong>
+                            <div>{member.employeeId || member.fac_username || "-"}</div>
+                          </div>
+                        </td>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(member.isHod)}
+                            onChange={(event) => {
+                              const checked = event.target.checked;
+                              setFacultyMembers((current) =>
+                                current.map((item) =>
+                                  (item.id || item.fac_username) === (member.id || member.fac_username)
+                                    ? { ...item, isHod: checked }
+                                    : item
+                                )
+                              );
+                            }}
+                          />
+                        </td>
+                        <td>{roleCheckbox("mentor")}</td>
+                        <td>{roleCheckbox("class_advisor")}</td>
+                        <td>{roleCheckbox("coordinator")}</td>
+                        <td>
+                          {requiresClassAssignment ? (
+                            <input
+                              type="text"
+                              value={member.className || ""}
+                              placeholder="Handled class"
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                setFacultyMembers((current) =>
+                                  current.map((item) =>
+                                    (item.id || item.fac_username) === (member.id || member.fac_username)
+                                      ? { ...item, className: nextValue }
+                                      : item
+                                  )
+                                );
+                              }}
+                            />
+                          ) : (
+                            <span>-</span>
+                          )}
+                        </td>
+                        <td>
+                          {requiresClassAssignment ? (
+                            <input
+                              type="text"
+                              value={member.section || ""}
+                              placeholder="Section"
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                setFacultyMembers((current) =>
+                                  current.map((item) =>
+                                    (item.id || item.fac_username) === (member.id || member.fac_username)
+                                      ? { ...item, section: nextValue }
+                                      : item
+                                  )
+                                );
+                              }}
+                            />
+                          ) : (
+                            <span>-</span>
+                          )}
+                        </td>
                         <td>
                           <button
                             type="button"
                             className="admin-action-button"
-                            disabled={approvingStudentId === student.id}
+                            disabled={updatingStudentRegno === (member.id || member.fac_username)}
                             onClick={async () => {
                               try {
-                                setApprovingStudentId(student.id);
-                                setApprovalMessage("");
+                                const memberKey = member.id || member.fac_username;
+                                setUpdatingStudentRegno(memberKey);
+                                setAssignmentMessage("");
+                                const currentMember = facultyMembers.find(
+                                  (item) => (item.id || item.fac_username) === memberKey
+                                ) || member;
                                 const response = await fetch(
-                                  `${API_BASE_URL}/student-accounts/${student.id}/approve/`,
+                                  `${API_BASE_URL}/faculty-accounts/roles/`,
                                   {
                                     method: "POST",
                                     credentials: "include",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      username:
+                                        currentMember.employeeId ||
+                                        currentMember.fac_username ||
+                                        "",
+                                      isHod: Boolean(currentMember.isHod),
+                                      roles: currentMember.roles || ["faculty"],
+                                      className: currentMember.className || "",
+                                      section: currentMember.section || "",
+                                    }),
                                   }
                                 );
                                 const data = await response.json();
                                 if (!response.ok) {
-                                  throw new Error(data.detail || "Unable to approve student.");
+                                  throw new Error(data.detail || "Unable to update faculty roles.");
                                 }
-                                setStudentAccounts((current) =>
+                                setFacultyMembers((current) =>
                                   current.map((item) =>
-                                    item.id === student.id ? data : item
+                                    (item.id || item.fac_username) === memberKey
+                                      ? data
+                                      : item
                                   )
                                 );
-                                setApprovalMessage(
-                                  `${student.username} approved successfully.`
+                                setAssignmentMessage(
+                                  `Updated roles for ${data.name || data.fac_username || "faculty member"}.`
                                 );
                               } catch (error) {
-                                setApprovalMessage(
-                                  error.message || "Unable to approve student account."
+                                setAssignmentMessage(
+                                  error.message || "Unable to update faculty roles."
                                 );
                               } finally {
-                                setApprovingStudentId("");
+                                setUpdatingStudentRegno("");
                               }
                             }}
                           >
-                            {approvingStudentId === student.id ? "Approving..." : "Approve"}
+                            {updatingStudentRegno === (member.id || member.fac_username) ? "Saving..." : "Save"}
                           </button>
                         </td>
                       </tr>
-                    ))
+                    );
+                    })
                   ) : (
                     <tr>
-                      <td colSpan="6">No pending student approvals right now.</td>
+                      <td colSpan="8">No faculty records are available for role assignment yet.</td>
                     </tr>
                   )}
                 </tbody>
@@ -336,12 +464,51 @@ function HodDashboard({
           </section>
 
           <section className="hod-surface-card">
+            <div className="admin-card-headline">
+              <div>
+                <p className="portal-page-tag">Student Accounts</p>
+                <h3>Student Login Records</h3>
+              </div>
+            </div>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Register No</th>
+                    <th>Department</th>
+                    <th>Added By</th>
+                    <th>First Login</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentAccounts.length ? (
+                    studentAccounts.map((student) => (
+                      <tr key={student.id || student.username}>
+                        <td>{student.username}</td>
+                        <td>{student.department || "-"}</td>
+                        <td>{student.added_by || "-"}</td>
+                        <td>{student.must_change_password ? "Pending" : "Completed"}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4">No student login records right now.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="hod-surface-card">
             <div className="admin-table-wrap">
               <table className="admin-table">
                 <thead>
                   <tr>
                     <th>Name</th>
                     <th>Register No</th>
+                    <th>Class Advisor</th>
+                    <th>Mentor</th>
                     <th>CGPA</th>
                     <th>Eligibility</th>
                     <th>Placement</th>
@@ -352,6 +519,8 @@ function HodDashboard({
                     <tr key={student.regno}>
                       <td>{`${student.firstName || ""} ${student.lastName || ""}`.trim()}</td>
                       <td>{student.regno}</td>
+                      <td>{student.classAdvisorName || student.classAdvisor || "-"}</td>
+                      <td>{student.mentorName || student.mentor || "-"}</td>
                       <td>{student.cgpa || "-"}</td>
                       <td>{student.eligibility || "-"}</td>
                       <td>{student.placement || "Pending"}</td>
@@ -366,14 +535,14 @@ function HodDashboard({
     }
 
     if (activeSection === "faculty") {
-      const handleDeleteFaculty = async (facultyId, facultyUsername) => {
+      const handleDeleteFaculty = async (facultyId, facultyName) => {
         if (!facultyId) {
           setFacultySubmitMessage("Unable to delete this faculty record.");
           return;
         }
 
         const isConfirmed = window.confirm(
-          `Are you sure you want to remove ${facultyUsername}?`
+          `Are you sure you want to remove ${facultyName || "this faculty member"}?`
         );
         if (!isConfirmed) {
           return;
@@ -386,7 +555,6 @@ function HodDashboard({
             method: "DELETE",
             credentials: "include",
           });
-
           const data = await response.json();
           if (!response.ok) {
             throw new Error(data.detail || "Unable to delete faculty account.");
@@ -409,117 +577,13 @@ function HodDashboard({
             <p className="portal-page-tag">Faculty Team</p>
             <h2>{content.sidebarTitle} Faculty Overview</h2>
             <p className="portal-page-text">
-              Add faculty details here. The faculty name becomes the username and the
-              default password is stored as 1234 for first-time login.
+              Faculty records here are live department records. Employee ID is the username,
+              the faculty name appears in the sidebar profile after login, and the default
+              password for first login is 1234.
             </p>
-          </section>
-
-          <section className="hod-surface-card">
-            <div className="form-grid">
-              <div className="form-group">
-                <label htmlFor="fac-name">Faculty Name</label>
-                <input
-                  id="fac-name"
-                  type="text"
-                  value={facultyForm.name}
-                  onChange={(event) =>
-                    setFacultyForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  placeholder="Enter faculty name"
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="fac-degree">Degree</label>
-                <input
-                  id="fac-degree"
-                  type="text"
-                  value={facultyForm.degree}
-                  onChange={(event) =>
-                    setFacultyForm((current) => ({
-                      ...current,
-                      degree: event.target.value,
-                    }))
-                  }
-                  placeholder="Enter degree"
-                />
-              </div>
-              <div className="form-group full-width">
-                <label htmlFor="fac-position">Position</label>
-                <input
-                  id="fac-position"
-                  type="text"
-                  value={facultyForm.position}
-                  onChange={(event) =>
-                    setFacultyForm((current) => ({
-                      ...current,
-                      position: event.target.value,
-                    }))
-                  }
-                  placeholder="Enter faculty position"
-                />
-              </div>
-            </div>
-            <div className="form-navigation">
-              <div className="portal-page-text">
-                {facultySubmitMessage ||
-                  "Faculty name will be stored as username and the default password will be 1234."}
-              </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  const name = facultyForm.name.trim();
-                  const degree = facultyForm.degree.trim();
-                  const position = facultyForm.position.trim();
-                  const department = content?.studentDepartments?.[0] || "";
-
-                  if (!name || !degree || !position || !department) {
-                    setFacultySubmitMessage(
-                      "Faculty name, degree, and position are required."
-                    );
-                    return;
-                  }
-
-                  try {
-                    setIsSubmittingFaculty(true);
-                    setFacultySubmitMessage("");
-                    const response = await fetch(`${API_BASE_URL}/faculty-accounts/`, {
-                      method: "POST",
-                      credentials: "include",
-                      headers: {
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({
-                        name,
-                        degree,
-                        position,
-                        department,
-                      }),
-                    });
-
-                    if (!response.ok) {
-                      throw new Error("Unable to add faculty account.");
-                    }
-
-                    const createdAccount = await response.json();
-                    setFacultyMembers((current) => [createdAccount, ...current]);
-                    setFacultyForm({ name: "", degree: "", position: "" });
-                    setFacultySubmitMessage("Faculty account added successfully.");
-                  } catch (error) {
-                    setFacultySubmitMessage(
-                      error.message || "Unable to add faculty account."
-                    );
-                  } finally {
-                    setIsSubmittingFaculty(false);
-                  }
-                }}
-                disabled={isSubmittingFaculty}
-              >
-                {isSubmittingFaculty ? "Saving..." : "Add Faculty"}
-              </button>
-            </div>
+            {facultySubmitMessage ? (
+              <p className="portal-page-text">{facultySubmitMessage}</p>
+            ) : null}
           </section>
 
           <section className="hod-teacher-grid">
@@ -535,24 +599,43 @@ function HodDashboard({
             ) : facultyMembers.length ? (
               facultyMembers.map((member) => (
                 <article className="hod-faculty-card" key={member.id || member.fac_username}>
+                  <button
+                    type="button"
+                    className="hod-faculty-remove-button"
+                    onClick={() =>
+                      handleDeleteFaculty(
+                        member.id,
+                        member.name || member.fac_username || "this faculty member"
+                      )
+                    }
+                    disabled={deletingFacultyId === member.id}
+                  >
+                    {deletingFacultyId === member.id ? "Removing..." : "Remove"}
+                  </button>
                   <div className="hod-faculty-avatar">
                     {member.fac_username.charAt(0).toUpperCase()}
                   </div>
                   <h3>{member.name || member.fac_username}</h3>
                   <p>{member.position || "Faculty Account"}</p>
+                  <div className="hod-faculty-badges">
+                    <span>{member.department || "-"}</span>
+                    <span>{member.mentor ? "Mentor" : "Faculty"}</span>
+                    {member.isHod ? <span>HOD</span> : null}
+                  </div>
+                  <span className="hod-faculty-meta">
+                    {member.employeeId || member.fac_username || "Employee ID not set"}
+                  </span>
                   {member.degree ? (
                     <span className="hod-faculty-meta">{member.degree}</span>
                   ) : null}
-                  <button
-                    type="button"
-                    className="admin-action-button hod-faculty-remove"
-                    onClick={() =>
-                      handleDeleteFaculty(member.id, member.fac_username)
-                    }
-                    disabled={deletingFacultyId === member.id}
-                  >
-                    {deletingFacultyId === member.id ? "Removing..." : "Remove Faculty"}
-                  </button>
+                  {member.className || member.section ? (
+                    <div className="hod-faculty-assignment">
+                      <strong>Class Assignment</strong>
+                      <span>
+                        {[member.className, member.section].filter(Boolean).join(" - ") || "-"}
+                      </span>
+                    </div>
+                  ) : null}
                 </article>
               ))
             ) : (
@@ -592,8 +675,8 @@ function HodDashboard({
             <article className="hod-report-card">
               <h3>Actionable Follow-up</h3>
               <ul className="admin-list">
-                <li>Approval Queue: {pendingStudentAccounts.length}</li>
                 <li>Mentor Mapping Completed: {metrics.mentorAssigned}</li>
+                <li>Student Accounts Created: {studentAccounts.length}</li>
                 <li>Placed Percentage: {metrics.placedPercentage}%</li>
                 <li>Faculty Records Listed: {facultyMembers.length}</li>
               </ul>
@@ -611,7 +694,7 @@ function HodDashboard({
               <p className="portal-page-tag">HOD Access</p>
               <h1>Welcome, {currentUser?.username || content.sidebarTitle} HOD</h1>
               <p className="hod-hero-text">
-                Monitor approvals, faculty engagement, and placement readiness for{" "}
+                Monitor student assignments, faculty engagement, and placement readiness for{" "}
                 {content.title} from one clear department workspace.
               </p>
               <div className="hod-hero-badges">
@@ -713,11 +796,11 @@ function HodDashboard({
           </article>
 
           <article className="hod-highlight-card">
-            <p>Approval Queue</p>
-            <strong>{pendingStudentAccounts.length}</strong>
-            <span>student profiles pending review</span>
+            <p>Student Accounts</p>
+            <strong>{studentAccounts.length}</strong>
+            <span>login records created for students</span>
             <div className="hod-highlight-meta">
-              <span>{metrics.eligibleStudents} eligible</span>
+              <span>{metrics.mentorAssigned} mapped</span>
               <span>{metrics.placedStudents} placed</span>
             </div>
           </article>

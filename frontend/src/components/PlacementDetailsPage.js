@@ -53,6 +53,11 @@ function PlacementDetailsPage({
           <h1>Placement Details</h1>
           <p className="portal-page-text">{loadError}</p>
         </section>
+      ) : !pageData || !pageData.title || !Array.isArray(pageData.sections) || !pageData.sections.length ? (
+        <section className="portal-page-card">
+          <h1>Placement Details</h1>
+          <p className="portal-page-text">No placement details have been added yet.</p>
+        </section>
       ) : (
         <>
           <section className="portal-page-card">

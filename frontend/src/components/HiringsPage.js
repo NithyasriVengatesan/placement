@@ -60,6 +60,10 @@ function HiringsPage({
         <section className="portal-page-card">
           <p className="portal-page-text">{loadError}</p>
         </section>
+      ) : hirings.length === 0 ? (
+        <section className="portal-page-card">
+          <p className="portal-page-text">No hiring opportunities have been added yet.</p>
+        </section>
       ) : (
         <section className="dashboard-grid dashboard-grid-two">
           {hirings.map((hiring) => (

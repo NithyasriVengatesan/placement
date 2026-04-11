@@ -30,7 +30,15 @@ function Dashboard({
         const data = await response.json();
         setDashboardData(data);
       } catch (error) {
-        setLoadError(error.message || "Unable to load dashboard data.");
+        const isNetworkFailure =
+          error instanceof TypeError &&
+          /failed to fetch|networkerror|load failed/i.test(error.message || "");
+
+        setLoadError(
+          isNetworkFailure
+            ? "Backend server is not reachable. Start Django on http://127.0.0.1:8000 and refresh this page."
+            : error.message || "Unable to load dashboard data."
+        );
       } finally {
         setIsLoading(false);
       }

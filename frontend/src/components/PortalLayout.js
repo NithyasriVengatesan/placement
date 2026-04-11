@@ -25,7 +25,13 @@ export function PortalSubnav({ currentPage, onNavigate, onOpenStudentForm }) {
             {item.label}
           </button>
         ))}
-        <button onClick={onOpenStudentForm}>4th Year Form</button>
+        <button
+          type="button"
+          className={`subnav-link ${currentPage === "student-form" ? "active" : ""}`}
+          onClick={onOpenStudentForm}
+        >
+          Student Form
+        </button>
       </div>
     </div>
   );

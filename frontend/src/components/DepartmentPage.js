@@ -10,6 +10,14 @@ function toNumber(value) {
   return Number.isFinite(parsedValue) ? parsedValue : 0;
 }
 
+function normalizeDepartmentValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function DepartmentPage({
   departmentKey,
   activeSection = "overview",
@@ -41,9 +49,18 @@ function DepartmentPage({
         }
 
         const records = await response.json();
-        const allowedDepartments = content?.studentDepartments || [];
+        const allowedDepartments = [
+          ...(content?.studentDepartments || []),
+          content?.sidebarTitle || "",
+          departmentKey || "",
+        ]
+          .map(normalizeDepartmentValue)
+          .filter(Boolean);
+
         setStudents(
-          records.filter((student) => allowedDepartments.includes(student.department))
+          records.filter((student) =>
+            allowedDepartments.includes(normalizeDepartmentValue(student.department))
+          )
         );
       } catch (error) {
         setLoadError(error.message || "Unable to load department students.");
@@ -127,14 +144,20 @@ function DepartmentPage({
         students.length
       ).toFixed(2)
     : "0.00";
-  const hodRecord = facultyMembers[0] || null;
+  const hodRecord =
+    facultyMembers.find((member) => member.isHod) || facultyMembers[0] || null;
   const buildDepartmentPage = (section) => `department:${departmentKey}:${section}`;
 
   const renderActiveSection = () => {
     if (activeSection === "faculty") {
       return (
         <section className="dashboard-card">
+          <div className="admin-card-headline">
+            <div>
             <h3>Faculty Details</h3>
+              <p>All faculty records available for {content.title} are listed below.</p>
+            </div>
+          </div>
           <div className="department-detail-grid">
             {isFacultyLoading ? (
               <article className="department-detail-card">
@@ -149,11 +172,38 @@ function DepartmentPage({
             ) : facultyMembers.length ? (
               facultyMembers.map((member) => (
                 <article
-                  className="department-detail-card"
+                  className="department-detail-card department-faculty-card"
                   key={member.id || member.fac_username}
                 >
                   <h4>{member.name || member.fac_username}</h4>
                   <p>{member.position || "Faculty Account"}</p>
+                  <div className="department-faculty-tags">
+                    <span>{member.department || "-"}</span>
+                    <span>{member.mentor ? "Mentor" : "Faculty"}</span>
+                    {member.isHod ? <span>HOD</span> : null}
+                  </div>
+                  <div className="department-faculty-meta-list">
+                    <div className="department-faculty-meta-row">
+                      <strong>Employee ID</strong>
+                      <span>{member.employeeId || member.fac_username || "-"}</span>
+                    </div>
+                    <div className="department-faculty-meta-row">
+                      <strong>Access</strong>
+                      <span>
+                        {(member.roles?.length ? member.roles : ["faculty"])
+                          .map((role) => role.toUpperCase())
+                          .join(", ")}
+                      </span>
+                    </div>
+                    <div className="department-faculty-meta-row">
+                      <strong>Class</strong>
+                      <span>{member.className || "-"}</span>
+                    </div>
+                    <div className="department-faculty-meta-row">
+                      <strong>Section</strong>
+                      <span>{member.section || "-"}</span>
+                    </div>
+                  </div>
                   {member.degree ? (
                     <p className="department-detail-meta">Degree: {member.degree}</p>
                   ) : null}
@@ -162,7 +212,7 @@ function DepartmentPage({
             ) : (
               <article className="department-detail-card">
                 <h4>No faculty added yet</h4>
-                <p>Faculty accounts created from the HOD dashboard will appear here.</p>
+                <p>Faculty records for this department are not available yet.</p>
               </article>
             )}
           </div>
@@ -234,20 +284,6 @@ function DepartmentPage({
               onClick={() =>
                 onOpenLogin({
                   portalType: "department",
-                  departmentRole: "hod",
-                  hodOnly: true,
-                  departmentKey,
-                })
-              }
-            >
-              HOD Login
-            </button>
-            <button
-              type="button"
-              className="department-login-button"
-              onClick={() =>
-                onOpenLogin({
-                  portalType: "department",
                   departmentRole: "faculty",
                   departmentKey,
                 })
@@ -261,12 +297,13 @@ function DepartmentPage({
               onClick={() =>
                 onOpenLogin({
                   portalType: "department",
-                  departmentRole: "mentor",
+                  departmentRole: "hod",
+                  hodOnly: true,
                   departmentKey,
                 })
               }
             >
-              Mentor Login
+              JA Login
             </button>
             <button
               type="button"
@@ -321,10 +358,27 @@ function DepartmentPage({
           <section className="dashboard-card">
             <h3>Head of the Department</h3>
             <div className="department-detail-grid">
-              <article className="department-detail-card">
-                <h4>{hodRecord.fac_username}</h4>
-                <p>Latest faculty account added</p>
-                <p className="department-detail-meta">{hodRecord.department}</p>
+              <article className="department-detail-card department-faculty-card">
+                <h4>{hodRecord.name || hodRecord.fac_username}</h4>
+                <p>{hodRecord.position || "HOD"}</p>
+                <div className="department-faculty-tags">
+                  <span>{hodRecord.department || "-"}</span>
+                  <span>HOD</span>
+                </div>
+                <div className="department-faculty-meta-list">
+                  <div className="department-faculty-meta-row">
+                    <strong>Employee ID</strong>
+                    <span>{hodRecord.employeeId || hodRecord.fac_username || "-"}</span>
+                  </div>
+                  <div className="department-faculty-meta-row">
+                    <strong>Access</strong>
+                    <span>
+                      {(hodRecord.roles?.length ? hodRecord.roles : ["faculty"])
+                        .map((role) => role.toUpperCase())
+                        .join(", ")}
+                    </span>
+                  </div>
+                </div>
               </article>
             </div>
           </section>

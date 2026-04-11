@@ -65,6 +65,8 @@ function InternsPage({
           <p className="portal-page-text">Loading internship opportunities...</p>
         ) : loadError ? (
           <p className="portal-page-text">{loadError}</p>
+        ) : internshipCompanies.length === 0 ? (
+          <p className="portal-page-text">No internship opportunities have been added yet.</p>
         ) : (
           <>
             <div className="intern-select-wrap">

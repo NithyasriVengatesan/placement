@@ -65,6 +65,10 @@ function resolveFacultyDashboard(user, fallbackDepartmentKey = "") {
   return resolveDepartmentPage(user, fallbackDepartmentKey);
 }
 
+function isFacultyWorkspaceRole(role) {
+  return ["faculty", "mentor", "class_advisor", "coordinator"].includes(role);
+}
+
 function resolveStudentDashboard(user, fallbackDepartmentKey = "") {
   const departmentKey =
     getDepartmentKeyFromDepartmentName(user?.department) ||
@@ -76,6 +80,30 @@ function resolveStudentDashboard(user, fallbackDepartmentKey = "") {
   }
 
   return resolveDepartmentPage(user, fallbackDepartmentKey);
+}
+
+async function studentHasProfile(username) {
+  if (!username) {
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/students/`, {
+      credentials: "include",
+    });
+    if (!response.ok) {
+      return false;
+    }
+
+    const records = await response.json();
+    return records.some(
+      (student) =>
+        String(student.regno || "").trim().toUpperCase() ===
+        String(username || "").trim().toUpperCase()
+    );
+  } catch (error) {
+    return false;
+  }
 }
 
 function resolveHodDashboard(user, fallbackDepartmentKey = "") {
@@ -112,8 +140,12 @@ function App() {
         const data = await response.json();
         if (data.authenticated) {
           setCurrentUser(data);
+          if (data.role === "student" && !(await studentHasProfile(data.username))) {
+            setCurrentPage("student-form");
+            return;
+          }
           setCurrentPage(
-            data.role === "faculty"
+            isFacultyWorkspaceRole(data.role)
               ? resolveFacultyDashboard(data)
               : data.role === "student"
                 ? resolveStudentDashboard(data)
@@ -129,17 +161,6 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
-    const currentDepartmentKey =
-      (currentPage.startsWith("hod:") ||
-        currentPage.startsWith("department:") ||
-        currentPage.startsWith("faculty:") ||
-        currentPage.startsWith("student:")) &&
-      currentPage.split(":")[1]
-        ? currentPage.split(":")[1]
-        : getDepartmentKeyFromUsername(currentUser?.username) ||
-          getDepartmentKeyFromDepartmentName(currentUser?.department) ||
-          "";
-
     try {
       await fetch(`${API_BASE_URL}/auth/logout/`, {
         method: "POST",
@@ -149,10 +170,16 @@ function App() {
       // Best effort logout for the local portal.
     } finally {
       setCurrentUser(null);
-      if (currentDepartmentKey && getDepartmentContent(currentDepartmentKey)) {
-        setCurrentPage(`department:${currentDepartmentKey}:overview`);
-        return;
-      }
+      setLoginDefaults({
+        portalType: "admin",
+        departmentRole: "hod",
+        studentOnly: false,
+        hodOnly: false,
+        departmentKey: "",
+      });
+      setLoginReturnPage("home");
+      setPendingFacultyPasswordReset(null);
+      setPendingStudentPasswordReset(null);
       setCurrentPage("home");
     }
   };
@@ -242,10 +269,11 @@ function App() {
         studentOnly={loginDefaults.studentOnly}
         onLoginSuccess={(user) => {
           if (user.requiresPasswordChange) {
-            if (user.role === "faculty") {
+            if (isFacultyWorkspaceRole(user.role)) {
               setPendingFacultyPasswordReset({
                 username: user.username,
                 departmentKey: loginDefaults.departmentKey,
+                role: user.role,
               });
               setCurrentPage("faculty-password-change");
               return;
@@ -262,7 +290,7 @@ function App() {
           }
           setCurrentUser(user);
           setCurrentPage(
-            user.role === "faculty"
+            isFacultyWorkspaceRole(user.role)
               ? resolveFacultyDashboard(user, loginDefaults.departmentKey)
               : user.role === "student"
                 ? resolveStudentDashboard(user, loginDefaults.departmentKey)
@@ -283,7 +311,7 @@ function App() {
         initialDepartmentRole="student"
         initialDepartmentKey={loginDefaults.departmentKey}
         studentOnly
-        onLoginSuccess={(user) => {
+        onLoginSuccess={async (user) => {
           if (user.requiresPasswordChange) {
             setPendingStudentPasswordReset({
               username: user.username,
@@ -293,7 +321,12 @@ function App() {
             return;
           }
           setCurrentUser(user);
-          setCurrentPage(resolveStudentDashboard(user, loginDefaults.departmentKey));
+          const hasProfile = await studentHasProfile(user.username);
+          setCurrentPage(
+            hasProfile
+              ? resolveStudentDashboard(user, loginDefaults.departmentKey)
+              : "student-form"
+          );
         }}
       />
     );
@@ -306,12 +339,13 @@ function App() {
         onNavigate={setCurrentPage}
         onOpenStudentForm={() => setCurrentPage("student-form")}
         facultyUsername={pendingFacultyPasswordReset?.username || ""}
+        activeRole={pendingFacultyPasswordReset?.role || "faculty"}
         departmentKey={pendingFacultyPasswordReset?.departmentKey || ""}
         onSuccess={(user) => {
           setCurrentUser(user);
           setPendingFacultyPasswordReset(null);
           setCurrentPage(
-            user.role === "faculty"
+            isFacultyWorkspaceRole(user.role)
               ? resolveFacultyDashboard(user, pendingFacultyPasswordReset?.departmentKey)
               : resolveDepartmentPage(user, pendingFacultyPasswordReset?.departmentKey)
           );
@@ -401,6 +435,7 @@ function App() {
         onOpenStudentForm={() => setCurrentPage("student-form")}
         onOpenLogin={openLogin}
         currentUser={currentUser}
+        onSessionUserChange={setCurrentUser}
         onLogout={handleLogout}
       />
     );

@@ -1,7 +1,7 @@
 import React from "react";
 import "./ProgressBar.css";
 
-function ProgressBar({ step }) {
+function ProgressBar({ step, onStepChange }) {
 
 const steps = [
 "Basic",
@@ -43,26 +43,27 @@ return(
 
 <div className="step-item" key={index}>
 
+<button
+type="button"
+className={`step-button ${onStepChange ? "clickable" : ""}`}
+onClick={() => onStepChange && onStepChange(stepNumber)}
+disabled={!onStepChange}
+>
 <div
-
 className={`step-circle
 ${step===stepNumber?"active":""}
 ${step>stepNumber?"completed":""}
 `}
-
 >
-
 {step>stepNumber ? "✓" : stepNumber}
-
 </div>
 
 <div className={`step-label
 ${step===stepNumber?"active-label":""}
 `}>
-
 {label}
-
 </div>
+</button>
 
 </div>
 

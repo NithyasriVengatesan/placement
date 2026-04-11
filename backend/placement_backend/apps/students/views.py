@@ -5,27 +5,39 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .file_utils import save_uploaded_file, save_uploaded_pdf, validate_uploaded_file
+from .file_utils import (
+    save_faculty_profile_photo,
+    save_uploaded_file,
+    save_uploaded_pdf,
+    validate_uploaded_file,
+)
 from .serializers import (
     DepartmentPlacementSerializer,
     FacultyAccountSerializer,
+    FacultyImportSerializer,
     FacultyPasswordChangeSerializer,
+    FacultyProfileUpdateSerializer,
+    FacultyRoleUpdateSerializer,
+    FacultyScheduleEventSerializer,
     LoginSerializer,
+    SessionRoleSwitchSerializer,
     StarStudentSerializer,
+    StudentAssignmentSerializer,
     StudentAccountSerializer,
     StudentPasswordChangeSerializer,
     StudentSerializer,
 )
 from .services import (
-    approve_student_account,
     authenticate_faculty_account,
     authenticate_student_account,
     create_department_placement_stat,
     create_faculty_account,
+    create_faculty_schedule_event,
     create_star_student,
     create_student,
     create_student_account,
     delete_faculty_account,
+    delete_student_account,
     get_admin_dashboard_overview,
     get_student_by_regno,
     get_contact_details,
@@ -34,12 +46,18 @@ from .services import (
     get_placement_details_content,
     list_hirings,
     list_faculty_accounts,
+    list_faculty_schedule_events,
     list_internships,
     list_department_placement_stats,
     list_star_students,
     list_student_accounts,
     list_students,
+    parse_faculty_import_file,
+    import_faculty_accounts,
+    update_faculty_roles,
     update_faculty_password,
+    update_faculty_profile,
+    update_student_faculty_mapping,
     update_student_password,
 )
 
@@ -64,6 +82,20 @@ def _get_portal_role(user):
 def _set_portal_session(request, payload):
     request.session["portal_user"] = payload
     request.session.modified = True
+
+
+def _faculty_portal_payload(account, active_role):
+    roles = account.get("roles") or ["faculty"]
+    normalized_roles = [str(role).strip().lower() for role in roles if str(role).strip()]
+    if account.get("isHod") and "hod" not in normalized_roles:
+        normalized_roles.append("hod")
+    return {
+        "username": account.get("fac_username", ""),
+        "role": active_role,
+        "activeRole": active_role,
+        "availableRoles": normalized_roles or ["faculty"],
+        "department": account.get("department", ""),
+    }
 
 
 @api_view(["GET"])
@@ -217,7 +249,72 @@ def faculty_account_list_create(request):
 
     serializer = FacultyAccountSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    record = create_faculty_account(serializer.validated_data)
+    try:
+        record = create_faculty_account(serializer.validated_data)
+    except ValueError as error:
+        return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(record, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+def faculty_account_import(request):
+    serializer = FacultyImportSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    try:
+        rows = parse_faculty_import_file(serializer.validated_data["file"])
+        imported_records = import_faculty_accounts(
+            rows,
+            department=serializer.validated_data.get("department", ""),
+        )
+    except ValueError as error:
+        return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response(
+        {
+            "detail": f"Imported {len(imported_records)} faculty account(s).",
+            "records": imported_records,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+def faculty_account_role_update(request):
+    serializer = FacultyRoleUpdateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    updated_account = update_faculty_roles(
+        serializer.validated_data["username"],
+        serializer.validated_data["roles"],
+        is_hod=serializer.validated_data.get("isHod"),
+        class_name=serializer.validated_data.get("className"),
+        section=serializer.validated_data.get("section"),
+    )
+    if not updated_account:
+        return Response(
+            {"detail": "Unable to update faculty roles."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(updated_account)
+
+
+@api_view(["GET", "POST"])
+def faculty_schedule_event_list_create(request):
+    if request.method == "GET":
+        department = request.query_params.get("department", "")
+        faculty_username = request.query_params.get("facultyUsername", "")
+        return Response(
+            list_faculty_schedule_events(
+                department=department or None,
+                faculty_username=faculty_username or None,
+            )
+        )
+
+    serializer = FacultyScheduleEventSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    record = create_faculty_schedule_event(serializer.validated_data)
     return Response(record, status=status.HTTP_201_CREATED)
 
 
@@ -248,24 +345,42 @@ def faculty_password_change(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    portal_user = {
-        "username": updated_account.get("fac_username", ""),
-        "role": "faculty",
-        "department": updated_account.get("department", ""),
-    }
+    active_role = serializer.validated_data.get("role") or "faculty"
+    portal_user = _faculty_portal_payload(updated_account, active_role)
     _set_portal_session(request, portal_user)
     return Response(portal_user)
+
+
+@api_view(["POST"])
+def faculty_profile_update(request):
+    serializer = FacultyProfileUpdateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    updated_account = update_faculty_profile(
+        serializer.validated_data["username"],
+        profile_photo=save_faculty_profile_photo(
+            serializer.validated_data["profilePhoto"],
+            serializer.validated_data["username"],
+        )
+        if serializer.validated_data.get("profilePhoto")
+        else "",
+    )
+    if not updated_account:
+        return Response(
+            {"detail": "Unable to update faculty profile."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(updated_account)
 
 
 @api_view(["GET", "POST"])
 def student_account_list_create(request):
     if request.method == "GET":
         department = request.query_params.get("department", "")
-        approval_status = request.query_params.get("approval_status", "")
         return Response(
             list_student_accounts(
                 department=department or None,
-                approval_status=approval_status or None,
             )
         )
 
@@ -279,17 +394,35 @@ def student_account_list_create(request):
 
 
 @api_view(["POST"])
-def student_account_approve(request, student_account_id):
-    approved_account = approve_student_account(
-        student_account_id,
-        approved_by=request.user.username if request.user.is_authenticated else "",
+def student_assignment_update(request):
+    serializer = StudentAssignmentSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    updated_student = update_student_faculty_mapping(
+        regno=serializer.validated_data["regno"],
+        class_advisor=serializer.validated_data.get("classAdvisor", ""),
+        class_advisor_name=serializer.validated_data.get("classAdvisorName", ""),
+        mentor=serializer.validated_data.get("mentor", ""),
+        mentor_name=serializer.validated_data.get("mentorName", ""),
     )
-    if not approved_account:
+    if not updated_student:
         return Response(
-            {"detail": "Unable to approve student account."},
+            {"detail": "Unable to update student mapping."},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    return Response(approved_account)
+    return Response(updated_student)
+
+
+@api_view(["DELETE"])
+def student_account_delete(request, student_account_id):
+    deleted = delete_student_account(student_account_id)
+    if not deleted:
+        return Response(
+            {"detail": "Unable to delete student account."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    return Response({"detail": "Student account deleted successfully."})
 
 
 @api_view(["POST"])
@@ -327,6 +460,7 @@ def login_view(request):
         account, error_message = authenticate_faculty_account(
             serializer.validated_data["username"],
             serializer.validated_data["password"],
+            requested_role="faculty",
         )
         if not account:
             return Response(
@@ -334,11 +468,45 @@ def login_view(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        response_payload = {
-            "username": account.get("fac_username", ""),
-            "role": "faculty",
-            "department": account.get("department", ""),
-        }
+        response_payload = _faculty_portal_payload(account, "faculty")
+        if account.get("must_change_password"):
+            return Response({**response_payload, "requiresPasswordChange": True})
+
+        _set_portal_session(request, response_payload)
+        return Response(response_payload)
+
+    if requested_role == "mentor":
+        account, error_message = authenticate_faculty_account(
+            serializer.validated_data["username"],
+            serializer.validated_data["password"],
+            requested_role="mentor",
+        )
+        if not account:
+            return Response(
+                {"detail": error_message or "Mentor login failed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        response_payload = _faculty_portal_payload(account, "mentor")
+        if account.get("must_change_password"):
+            return Response({**response_payload, "requiresPasswordChange": True})
+
+        _set_portal_session(request, response_payload)
+        return Response(response_payload)
+
+    if requested_role in {"class_advisor", "coordinator"}:
+        account, error_message = authenticate_faculty_account(
+            serializer.validated_data["username"],
+            serializer.validated_data["password"],
+            requested_role=requested_role,
+        )
+        if not account:
+            return Response(
+                {"detail": error_message or f"{requested_role} login failed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        response_payload = _faculty_portal_payload(account, requested_role)
         if account.get("must_change_password"):
             return Response({**response_payload, "requiresPasswordChange": True})
 
@@ -408,6 +576,30 @@ def logout_view(request):
     logout(request)
     request.session.pop("portal_user", None)
     return Response({"detail": "Logged out successfully."})
+
+
+@api_view(["POST"])
+def auth_switch_role(request):
+    portal_user = request.session.get("portal_user")
+    if not portal_user:
+        return Response(
+            {"detail": "You must be logged in to switch roles."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    serializer = SessionRoleSwitchSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    requested_role = serializer.validated_data["role"]
+    available_roles = [str(role).strip().lower() for role in portal_user.get("availableRoles", [])]
+    if requested_role not in available_roles:
+        return Response(
+            {"detail": "This account does not have access to that role."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    updated_payload = {**portal_user, "role": requested_role, "activeRole": requested_role}
+    _set_portal_session(request, updated_payload)
+    return Response(updated_payload)
 
 
 @api_view(["GET"])

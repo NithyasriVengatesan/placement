@@ -1,41 +1,22 @@
 import React from "react";
 
-function LoginVisualPanel({ title = "Placement Portal", caption = "Secure access for campus placement workflows." }) {
+function LoginVisualPanel({ title, tag, onBack, backLabel = "Back to Portal" }) {
   return (
     <div className="login-showcase-visual">
-      <div className="login-visual-stack">
-        <div className="login-monster login-monster-pink-top">
-          <div className="login-monster-eyes">
-            <span />
-            <span />
-          </div>
-        </div>
-
-        <div className="login-monster login-monster-big-pink">
-          <div className="login-monster-eye-single" />
-          <div className="login-monster-mouth" />
-        </div>
-
-        <div className="login-monster login-monster-cloud">
-          <div className="login-monster-eyes">
-            <span />
-            <span />
-          </div>
-        </div>
-
-        <div className="login-monster login-monster-blue">
-          <div className="login-monster-eyes">
-            <span />
-            <span />
-          </div>
-          <div className="login-monster-mouth login-monster-mouth-blue" />
-        </div>
-      </div>
-
-      <div className="login-visual-copy">
-        <p className="login-visual-tag">Campus Access</p>
-        <h2>{title}</h2>
-        <p>{caption}</p>
+      <div className="login-visual-top">
+        {onBack ? (
+          <button type="button" className="login-visual-back-link" onClick={onBack}>
+            {backLabel}
+          </button>
+        ) : null}
+        {tag ? <p className="login-visual-tag">{tag}</p> : null}
+        {title ? <h2 className="login-visual-title">{title}</h2> : null}
+        <div className="login-leaf login-leaf-left" />
+        <div className="login-leaf login-leaf-center" />
+        <div className="login-leaf login-leaf-right" />
+        <div className="login-hill login-hill-left" />
+        <div className="login-hill login-hill-right" />
+        <div className="login-dot-cluster" />
       </div>
     </div>
   );

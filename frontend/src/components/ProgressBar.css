@@ -41,6 +41,26 @@
   width: 100%;
 }
 
+.step-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+
+.step-button.clickable {
+  cursor: pointer;
+}
+
+.step-button:disabled {
+  cursor: default;
+}
+
 .step-circle {
   width: 36px;
   height: 36px;
@@ -53,6 +73,12 @@
   font-weight: bold;
   color: #667085;
   transition: 0.3s;
+}
+
+.step-button.clickable:hover .step-circle,
+.step-button.clickable:focus-visible .step-circle {
+  border-color: #4f5863;
+  box-shadow: 0 0 0 4px rgba(79, 88, 99, 0.12);
 }
 
 .step-circle.active {
@@ -77,6 +103,10 @@
 .step-label.active-label {
   color: #1f2937;
   font-weight: 600;
+}
+
+.step-button:focus-visible {
+  outline: none;
 }
 
 @media (max-width: 768px) {

@@ -92,16 +92,13 @@ function HodLoginPage({
 
             <div className="login-card hod-login-card">
               <LoginVisualPanel
-                title="HOD Access"
-                caption="Sign in to review approvals, faculty records, and department placement progress."
+                title="HOD Login"
+                tag="Department Access"
+                onBack={onBack}
+                backLabel="Back to Department"
               />
 
               <div className="login-card-panel">
-                <button type="button" className="login-back-link" onClick={onBack}>
-                  Back to Department
-                </button>
-                <p className="login-tag">Department Access</p>
-                <h1>HOD Login</h1>
                 <p className="login-copy">
                   Sign in using your HOD email address and password to access the
                   department placement dashboard.

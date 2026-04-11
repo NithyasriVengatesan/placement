@@ -25,12 +25,16 @@ class LanguageSerializer(serializers.Serializer):
 
 
 class StudentSerializer(serializers.Serializer):
-    classAdvisor = serializers.CharField()
+    classAdvisor = serializers.CharField(required=False, allow_blank=True)
+    classAdvisorName = serializers.CharField(required=False, allow_blank=True)
+    mentor = serializers.CharField(required=False, allow_blank=True)
+    mentorName = serializers.CharField(required=False, allow_blank=True)
     firstName = serializers.CharField()
     lastName = serializers.CharField()
     department = serializers.CharField()
     degree = serializers.CharField()
     year = serializers.CharField()
+    batch = serializers.CharField(required=False, allow_blank=True)
     dob = serializers.CharField(required=False, allow_blank=True)
     age = serializers.CharField(required=False, allow_blank=True)
     gender = serializers.CharField(required=False, allow_blank=True)
@@ -58,6 +62,7 @@ class StudentSerializer(serializers.Serializer):
     sslcBoard = serializers.ChoiceField(
         choices=["CBSE", "STATE BOARD", "MATRICULATION", "ICSE"]
     )
+    sslcMedium = serializers.CharField(required=False, allow_blank=True)
     sslcSchoolName = serializers.CharField()
     sslcLocation = serializers.CharField()
     sslcRegisterNo = serializers.CharField(required=False, allow_blank=True)
@@ -66,17 +71,21 @@ class StudentSerializer(serializers.Serializer):
     hscBoard = serializers.ChoiceField(
         choices=["CBSE", "STATE BOARD", "MATRICULATION", "ICSE"]
     )
+    hscMedium = serializers.CharField(required=False, allow_blank=True)
     hscSchoolName = serializers.CharField()
     hscLocation = serializers.CharField()
     hscRegisterNo = serializers.CharField(required=False, allow_blank=True)
     hscPercentage = serializers.CharField()
     hscYear = serializers.CharField()
     diplomaSpecialization = serializers.CharField(required=False, allow_blank=True)
+    diplomaMedium = serializers.CharField(required=False, allow_blank=True)
     diplomaInstitute = serializers.CharField(required=False, allow_blank=True)
     diplomaLocation = serializers.CharField(required=False, allow_blank=True)
     diplomaRegisterNo = serializers.CharField(required=False, allow_blank=True)
     diplomaPercentage = serializers.CharField(required=False, allow_blank=True)
     diplomaYear = serializers.CharField(required=False, allow_blank=True)
+    className = serializers.CharField(required=False, allow_blank=True)
+    section = serializers.CharField(required=False, allow_blank=True)
     gpaSem1 = serializers.CharField(required=False, allow_blank=True)
     gpaSem2 = serializers.CharField(required=False, allow_blank=True)
     gpaSem3 = serializers.CharField(required=False, allow_blank=True)
@@ -87,7 +96,9 @@ class StudentSerializer(serializers.Serializer):
     cgpa = serializers.CharField(required=False, allow_blank=True)
     currentArrears = serializers.ChoiceField(choices=["0", "1", "2", "3", "4", "5"])
     historyArrears = serializers.ChoiceField(choices=["0", "1", "2", "3", "4", "5"])
-    eligibility = serializers.ChoiceField(choices=["Eligible", "Not Eligible"])
+    eligibility = serializers.ChoiceField(
+        choices=["Eligible", "Not Eligible"], required=False, allow_blank=True
+    )
     hardwareSkills = serializers.CharField(required=False, allow_blank=True)
     softwareSkills = serializers.CharField(required=False, allow_blank=True)
     domainSkills = serializers.CharField(required=False, allow_blank=True)
@@ -103,7 +114,6 @@ class StudentSerializer(serializers.Serializer):
         required=False,
     )
     otherDetails = serializers.CharField(required=False, allow_blank=True)
-    batch = serializers.CharField(required=False, allow_blank=True)
     placement = serializers.CharField(required=False, allow_blank=True)
     declarationAgreed = serializers.BooleanField()
 
@@ -154,14 +164,28 @@ class DepartmentPlacementSerializer(serializers.Serializer):
 
 
 class FacultyAccountSerializer(serializers.Serializer):
+    employeeId = serializers.CharField()
     name = serializers.CharField()
     degree = serializers.CharField()
     position = serializers.CharField()
     department = serializers.CharField()
+    isHod = serializers.BooleanField(required=False)
+    className = serializers.CharField(required=False, allow_blank=True)
+    section = serializers.CharField(required=False, allow_blank=True)
+    roles = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=["faculty", "mentor", "class_advisor", "coordinator"]
+        ),
+        required=False,
+    )
 
 
 class FacultyPasswordChangeSerializer(serializers.Serializer):
     username = serializers.CharField()
+    role = serializers.ChoiceField(
+        choices=["faculty", "mentor", "class_advisor", "coordinator"],
+        required=False,
+    )
     newPassword = serializers.CharField()
     confirmPassword = serializers.CharField()
 
@@ -173,10 +197,32 @@ class FacultyPasswordChangeSerializer(serializers.Serializer):
         return attrs
 
 
+class FacultyProfileUpdateSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    profilePhoto = serializers.ImageField(required=False)
+
+
+class FacultyScheduleEventSerializer(serializers.Serializer):
+    department = serializers.CharField()
+    facultyUsername = serializers.CharField()
+    title = serializers.CharField()
+    eventDate = serializers.DateField(input_formats=["%Y-%m-%d"])
+    eventTime = serializers.CharField(required=False, allow_blank=True)
+    note = serializers.CharField(required=False, allow_blank=True)
+
+
 class StudentAccountSerializer(serializers.Serializer):
     regno = serializers.CharField()
     department = serializers.CharField()
     addedBy = serializers.CharField(required=False, allow_blank=True)
+
+
+class StudentAssignmentSerializer(serializers.Serializer):
+    regno = serializers.CharField()
+    classAdvisor = serializers.CharField(required=False, allow_blank=True)
+    classAdvisorName = serializers.CharField(required=False, allow_blank=True)
+    mentor = serializers.CharField(required=False, allow_blank=True)
+    mentorName = serializers.CharField(required=False, allow_blank=True)
 
 
 class StudentPasswordChangeSerializer(serializers.Serializer):
@@ -196,5 +242,38 @@ class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField()
     loginType = serializers.ChoiceField(
-        choices=["admin", "hod", "faculty", "mentor", "student", "department"]
+        choices=[
+            "admin",
+            "hod",
+            "faculty",
+            "mentor",
+            "class_advisor",
+            "coordinator",
+            "student",
+            "department",
+        ]
+    )
+
+
+class FacultyRoleUpdateSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    isHod = serializers.BooleanField(required=False)
+    className = serializers.CharField(required=False, allow_blank=True)
+    section = serializers.CharField(required=False, allow_blank=True)
+    roles = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=["faculty", "mentor", "class_advisor", "coordinator"]
+        ),
+        min_length=1,
+    )
+
+
+class FacultyImportSerializer(serializers.Serializer):
+    file = serializers.FileField()
+    department = serializers.CharField(required=False, allow_blank=True)
+
+
+class SessionRoleSwitchSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(
+        choices=["faculty", "mentor", "class_advisor", "coordinator"]
     )

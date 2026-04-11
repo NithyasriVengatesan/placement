@@ -4,15 +4,17 @@ import "./App.css";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const ALLOWED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+const ALLOWED_FILE_TYPES = ["application/pdf"];
 
 const initialFormData = {
   classAdvisor: "",
+  mentor: "",
   firstName: "",
   lastName: "",
   department: "",
   degree: "",
   year: "",
+  batch: "",
   dob: "",
   age: "",
   gender: "",
@@ -38,23 +40,28 @@ const initialFormData = {
   motherOrganizationContactNumber: "",
   regno: "",
   sslcBoard: "",
+  sslcMedium: "",
   sslcSchoolName: "",
   sslcLocation: "",
   sslcRegisterNo: "",
   sslcPercentage: "",
   sslcYear: "",
   hscBoard: "",
+  hscMedium: "",
   hscSchoolName: "",
   hscLocation: "",
   hscRegisterNo: "",
   hscPercentage: "",
   hscYear: "",
   diplomaSpecialization: "",
+  diplomaMedium: "",
   diplomaInstitute: "",
   diplomaLocation: "",
   diplomaRegisterNo: "",
   diplomaPercentage: "",
   diplomaYear: "",
+  className: "",
+  section: "",
   gpaSem1: "",
   gpaSem2: "",
   gpaSem3: "",
@@ -78,7 +85,6 @@ const initialFormData = {
   agencyTraining: "",
   interestedDomains: [],
   otherDetails: "",
-  batch: "",
   placement: "",
   declarationAgreed: false,
 };
@@ -116,6 +122,21 @@ const interestedDomainOptions = [
 
 const boardOptions = ["CBSE", "STATE BOARD", "MATRICULATION", "ICSE"];
 
+const normalizeBoardValue = (value) => {
+  const normalized = String(value || "").trim().toUpperCase();
+  return boardOptions.includes(normalized) ? normalized : String(value || "").trim();
+};
+
+const normalizeArrearValue = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "nil") {
+    return "0";
+  }
+  return ["0", "1", "2", "3", "4", "5"].includes(String(value || "").trim())
+    ? String(value).trim()
+    : "0";
+};
+
 function StudentForm({ currentUser = null, existingStudent = null, onSuccess = null }) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(initialFormData);
@@ -125,33 +146,43 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
   const [submitError, setSubmitError] = useState("");
   const [profileRecord, setProfileRecord] = useState(existingStudent || null);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [facultyOptions, setFacultyOptions] = useState([]);
+  const [isFacultyOptionsLoading, setIsFacultyOptionsLoading] = useState(false);
 
   const mergeStudentProfile = useCallback((studentRecord) => {
     if (!studentRecord) {
       return;
     }
 
-    setProfileRecord(studentRecord);
+    const normalizedRecord = {
+      ...studentRecord,
+      sslcBoard: normalizeBoardValue(studentRecord.sslcBoard),
+      hscBoard: normalizeBoardValue(studentRecord.hscBoard),
+      currentArrears: normalizeArrearValue(studentRecord.currentArrears),
+      historyArrears: normalizeArrearValue(studentRecord.historyArrears),
+    };
+
+    setProfileRecord(normalizedRecord);
     setFormData((prev) => ({
       ...prev,
-      ...studentRecord,
+      ...normalizedRecord,
       languagesKnown:
-        studentRecord.languagesKnown?.length
-          ? studentRecord.languagesKnown
+        normalizedRecord.languagesKnown?.length
+          ? normalizedRecord.languagesKnown
           : prev.languagesKnown,
-      projects: studentRecord.projects?.length ? studentRecord.projects : prev.projects,
+      projects: normalizedRecord.projects?.length ? normalizedRecord.projects : prev.projects,
       internships:
-        studentRecord.internships?.length ? studentRecord.internships : prev.internships,
+        normalizedRecord.internships?.length ? normalizedRecord.internships : prev.internships,
       certifications:
-        studentRecord.certifications?.length
-          ? studentRecord.certifications
+        normalizedRecord.certifications?.length
+          ? normalizedRecord.certifications
           : prev.certifications,
       interestedDomains:
-        studentRecord.interestedDomains?.length
-          ? studentRecord.interestedDomains
+        normalizedRecord.interestedDomains?.length
+          ? normalizedRecord.interestedDomains
           : prev.interestedDomains,
-      regno: currentUser?.username || studentRecord.regno || prev.regno,
-      department: studentRecord.department || currentUser?.department || prev.department,
+      regno: currentUser?.username || normalizedRecord.regno || prev.regno,
+      department: normalizedRecord.department || currentUser?.department || prev.department,
     }));
   }, [currentUser]);
 
@@ -234,8 +265,102 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
     formData.gpaSem7,
   ]);
 
+  useEffect(() => {
+    const department = String(
+      formData.department || currentUser?.department || profileRecord?.department || ""
+    ).trim();
+
+    if (!department) {
+      setFacultyOptions([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadFacultyOptions = async () => {
+      try {
+        setIsFacultyOptionsLoading(true);
+        const response = await fetch(
+          `${API_BASE_URL}/faculty-accounts/?department=${encodeURIComponent(department)}`,
+          {
+            credentials: "include",
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Unable to load faculty list for this department.");
+        }
+
+        const records = await response.json();
+        if (isMounted) {
+          setFacultyOptions(records);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setFacultyOptions([]);
+          setSubmitError(error.message || "Unable to load faculty list.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsFacultyOptionsLoading(false);
+        }
+      }
+    };
+
+    loadFacultyOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser?.department, formData.department, profileRecord?.department]);
+
+  const classAdvisorOptions = facultyOptions
+    .map((member) => ({
+      value: member.employeeId || member.fac_username || "",
+      label: [member.name || member.fac_username, member.className, member.section]
+        .filter(Boolean)
+        .join(" - "),
+    }));
+
+  const mentorOptions = facultyOptions
+    .filter((member) =>
+      (member.roles || []).map((role) => String(role).trim().toLowerCase()).includes("mentor")
+    )
+    .map((member) => ({
+      value: member.employeeId || member.fac_username || "",
+      label: [member.name || member.fac_username, member.className, member.section]
+        .filter(Boolean)
+        .join(" - "),
+    }));
+
+  useEffect(() => {
+    if (
+      formData.classAdvisor &&
+      !classAdvisorOptions.some((option) => option.value === formData.classAdvisor)
+    ) {
+      setFormData((prev) => ({
+        ...prev,
+        classAdvisor: "",
+        classAdvisorName: "",
+      }));
+    }
+
+    if (formData.mentor && !mentorOptions.some((option) => option.value === formData.mentor)) {
+      setFormData((prev) => ({
+        ...prev,
+        mentor: "",
+        mentorName: "",
+      }));
+    }
+  }, [classAdvisorOptions, formData.classAdvisor, formData.mentor, mentorOptions]);
+
   const next = () => step < 12 && setStep(step + 1);
   const back = () => step > 1 && setStep(step - 1);
+  const goToStep = (targetStep) => {
+    if (targetStep >= 1 && targetStep <= 12) {
+      setStep(targetStep);
+    }
+  };
 
   const updateField = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -289,13 +414,17 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
 
   const validatePhoneNumber = (value) => !value || /^\d{10}$/.test(value);
   const validateEmail = (value) => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const isPdfFile = (file) =>
+    !!file &&
+    (ALLOWED_FILE_TYPES.includes(file.type) ||
+      String(file.name || "").trim().toLowerCase().endsWith(".pdf"));
 
   const validateSingleFile = (file) => {
     if (!file) {
       return "File is required.";
     }
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      return "Only PDF, JPG, and PNG files are allowed.";
+    if (!isPdfFile(file)) {
+      return "You can upload only PDF materials!!";
     }
     if (file.size > MAX_FILE_SIZE) {
       return "File size should be 5MB or less.";
@@ -344,7 +473,13 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
   const validateForm = () => {
     const existingDocuments = existingStudent?.documents || {};
 
-    if (!formData.classAdvisor || !formData.firstName || !formData.lastName || !formData.primaryEmail) {
+    if (
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.primaryEmail ||
+      !formData.classAdvisor ||
+      !formData.mentor
+    ) {
       return "Please complete the required details in Phase 1.";
     }
 
@@ -391,10 +526,6 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
 
     if (!formData.declarationAgreed || !formData.placement) {
       return "Please complete the declaration phase.";
-    }
-
-    if (!formData.eligibility) {
-      return "Please select the eligibility field in placement details.";
     }
 
     return "";
@@ -491,23 +622,23 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
     </div>
   );
 
-  const renderSelect = (label, field, values, placeholder) => (
+  const renderSelect = (label, field, values, placeholder, options = {}) => (
     <div className="form-group">
       <label>{label}</label>
       <select
         value={formData[field] ?? ""}
-        disabled={
-          (field === "department" && Boolean(currentUser?.department || profileRecord?.department)) ||
-          false
-        }
-        onChange={(event) => updateField(field, event.target.value)}
+        disabled={options.disabled || false}
+        onChange={options.onChange || ((event) => updateField(field, event.target.value))}
       >
         <option value="" disabled>
           {placeholder}
         </option>
         {values.map((value) => (
-          <option key={value} value={value}>
-            {value}
+          <option
+            key={typeof value === "object" ? value.value : value}
+            value={typeof value === "object" ? value.value : value}
+          >
+            {typeof value === "object" ? value.label : value}
           </option>
         ))}
       </select>
@@ -519,7 +650,7 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
       <label>{label}</label>
       <input
         type="file"
-        accept=".pdf,.jpg,.jpeg,.png"
+        accept=".pdf"
         multiple={multiple}
         onChange={multiple ? handleMultipleFileUpload : (event) => handleSingleFileUpload(field, event)}
       />
@@ -541,13 +672,12 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
       {isProfileLoading && (
         <p className="portal-page-text">Loading your saved profile details...</p>
       )}
-      <ProgressBar step={step} />
+      <ProgressBar step={step} onStepChange={goToStep} />
 
       {step === 1 && (
         <div className="phase-card">
           <h3>Basic Student Information</h3>
           <div className="form-grid">
-            {renderInput("Class Advisor", "classAdvisor")}
             {renderInput("First Name", "firstName")}
             {renderInput("Last Name (Initial at the back)", "lastName")}
             {renderSelect(
@@ -558,6 +688,10 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
             )}
             {renderSelect("Degree", "degree", ["B.E", "B.Tech"], "Select Degree")}
             {renderSelect("Year", "year", ["3rd Year", "4th Year"], "Select Year")}
+            {renderInput("Batch", "batch")}
+            {renderInput("Register No", "regno", {
+              disabled: Boolean(currentUser?.username || profileRecord?.regno),
+            })}
             {renderInput("Date of Birth", "dob", {
               type: "date",
               onChange: handleDOBChange,
@@ -609,6 +743,46 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
                   onChange={(event) => handleSingleFileUpload("passportDocument", event)}
                 />
               </div>
+            )}
+            {renderSelect(
+              "Class Advisor",
+              "classAdvisor",
+              classAdvisorOptions,
+              isFacultyOptionsLoading ? "Loading class advisors..." : "Select class advisor",
+              {
+                disabled: isFacultyOptionsLoading || !classAdvisorOptions.length,
+                onChange: (event) => {
+                  const selectedValue = event.target.value;
+                  const selectedOption = classAdvisorOptions.find(
+                    (option) => option.value === selectedValue
+                  );
+                  setFormData((prev) => ({
+                    ...prev,
+                    classAdvisor: selectedValue,
+                    classAdvisorName: selectedOption?.label || "",
+                  }));
+                },
+              }
+            )}
+            {renderSelect(
+              "Mentor",
+              "mentor",
+              mentorOptions,
+              isFacultyOptionsLoading ? "Loading mentors..." : "Select mentor",
+              {
+                disabled: isFacultyOptionsLoading || !mentorOptions.length,
+                onChange: (event) => {
+                  const selectedValue = event.target.value;
+                  const selectedOption = mentorOptions.find(
+                    (option) => option.value === selectedValue
+                  );
+                  setFormData((prev) => ({
+                    ...prev,
+                    mentor: selectedValue,
+                    mentorName: selectedOption?.label || "",
+                  }));
+                },
+              }
             )}
           </div>
 
@@ -770,6 +944,7 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
               <h4>10th Standard</h4>
               <div className="form-grid">
                 {renderSelect("Board", "sslcBoard", boardOptions, "Select Board")}
+                {renderInput("Medium", "sslcMedium")}
                 {renderInput("School Name", "sslcSchoolName")}
                 {renderInput("Location", "sslcLocation")}
                 {renderInput("Percentage", "sslcPercentage")}
@@ -779,6 +954,7 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
               <h4>12th Standard (Optional if Diploma)</h4>
               <div className="form-grid">
                 {renderSelect("Board", "hscBoard", boardOptions, "Select Board")}
+                {renderInput("Medium", "hscMedium")}
                 {renderInput("School Name", "hscSchoolName")}
                 {renderInput("Location", "hscLocation")}
                 {renderInput("Percentage", "hscPercentage")}
@@ -788,6 +964,7 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
               <h4>Diploma (if 12th not completed)</h4>
               <div className="form-grid">
                 {renderInput("Diploma Specialization", "diplomaSpecialization")}
+                {renderInput("Medium", "diplomaMedium")}
                 {renderInput("Institute Name", "diplomaInstitute")}
                 {renderInput("Location", "diplomaLocation")}
                 {renderInput("Percentage", "diplomaPercentage")}
@@ -805,6 +982,8 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
             <div className="phase-card">
               <h3>College Academic Details</h3>
               <div className="form-grid">
+                {renderInput("Class", "className")}
+                {renderInput("Section", "section")}
                 {renderInput("GPA in Sem1", "gpaSem1")}
                 {renderInput("GPA in Sem2", "gpaSem2")}
                 {renderInput("GPA in Sem3", "gpaSem3")}
@@ -1025,12 +1204,6 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
                   ["Yes", "No"],
                   "Select"
                 )}
-                {renderSelect(
-                  "Eligibility",
-                  "eligibility",
-                  ["Eligible", "Not Eligible"],
-                  "Select"
-                )}
               </div>
 
               <h4>Interested Domain</h4>
@@ -1062,6 +1235,10 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
           {step === 11 && (
             <div className="phase-card">
               <h3>Documents</h3>
+              <p className="portal-page-text">
+                Upload only PDF materials in this phase. If you choose any other file
+                type, the form will reject it.
+              </p>
               <div className="form-grid">
                 {renderFileInput("10th Marksheet", "tenthMarksheet")}
                 {renderFileInput("12th Marksheet", "twelfthMarksheet")}
@@ -1090,13 +1267,13 @@ function StudentForm({ currentUser = null, existingStudent = null, onSuccess = n
                 }}
               >
                 <div className="form-grid">
-                  {renderInput("Student Name", "firstName")}
+                  {renderInput("Student Name", "firstName", { disabled: true })}
                   {renderInput("University Reg No", "regno", {
                     disabled: Boolean(currentUser?.username || profileRecord?.regno),
                   })}
-                  {renderInput("Batch", "batch")}
+                  {renderInput("Batch", "batch", { disabled: true })}
                   {renderInput("Department", "department", {
-                    disabled: Boolean(currentUser?.department || profileRecord?.department),
+                    disabled: true,
                   })}
                 </div>
               </div>

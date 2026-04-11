@@ -53,6 +53,11 @@ function ContactPage({
           <h1>Placement Cell Contact</h1>
           <p className="portal-page-text">{loadError}</p>
         </section>
+      ) : !contactData || !contactData.title || !contactData.primary_contact ? (
+        <section className="portal-page-card">
+          <h1>Placement Cell Contact</h1>
+          <p className="portal-page-text">No contact details have been added yet.</p>
+        </section>
       ) : (
         <>
           <section className="portal-page-card">

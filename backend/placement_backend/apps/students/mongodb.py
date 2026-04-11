@@ -51,3 +51,7 @@ def get_faculty_account_collection():
 
 def get_student_account_collection():
     return db["student_accounts"]
+
+
+def get_faculty_schedule_collection():
+    return db["faculty_schedule_events"]

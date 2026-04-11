@@ -14,6 +14,7 @@ function FacultyPasswordChangePage({
   onNavigate,
   onOpenStudentForm,
   facultyUsername = "",
+  activeRole = "faculty",
   departmentKey = "",
 }) {
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -64,6 +65,7 @@ function FacultyPasswordChangePage({
         credentials: "include",
         body: JSON.stringify({
           username: facultyUsername,
+          role: activeRole,
           newPassword: form.newPassword,
           confirmPassword: form.confirmPassword,
         }),
@@ -115,17 +117,15 @@ function FacultyPasswordChangePage({
             <div className="login-card hod-login-card">
               <LoginVisualPanel
                 title="First Login Setup"
-                caption="Update your default faculty password once to unlock the faculty dashboard."
+                tag="Faculty First Login"
+                onBack={onBack}
+                backLabel="Back to Login"
               />
 
               <div className="login-card-panel">
-                <button type="button" className="login-back-link" onClick={onBack}>
-                  Back to Faculty Login
-                </button>
-                <p className="login-tag">Faculty First Login</p>
-                <h1>Change Password</h1>
                 <p className="login-copy">
-                  {facultyUsername} is signing in for the first time. Enter a new
+                  {facultyUsername} is signing in for the first time as{" "}
+                  {activeRole === "mentor" ? "Mentor" : "Faculty"}. Enter a new
                   password and confirm it to continue.
                 </p>
 

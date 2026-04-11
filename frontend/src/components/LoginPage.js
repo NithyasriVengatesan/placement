@@ -130,22 +130,13 @@ function LoginPage({
 
             <div className="login-card">
               <LoginVisualPanel
-                title={studentOnly ? "Student Access" : isLockedDepartmentRole ? `${pageTitle}` : "Welcome back!"}
-                caption={
-                  studentOnly
-                    ? "Continue with your student credentials to access the placement workspace."
-                    : isLockedDepartmentRole
-                      ? `Use your ${initialDepartmentRole} credentials to continue into the department portal.`
-                      : "Choose your portal type and sign in to continue with placements, approvals, and student workflows."
-                }
+                title={pageTitle}
+                tag={studentOnly ? "Student Portal Access" : "Placement Portal Access"}
+                onBack={onBack}
+                backLabel={studentOnly && departmentContent ? "Back to Department" : "Back to Portal"}
               />
 
               <div className="login-card-panel">
-                <button type="button" className="login-back-link" onClick={onBack}>
-                  Back to Portal
-                </button>
-                <p className="login-tag">Placement Portal Access</p>
-                <h1>{pageTitle}</h1>
                 <p className="login-copy">
                   {studentOnly
                     ? "Sign in using your register number and password."

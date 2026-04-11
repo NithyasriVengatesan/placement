@@ -8,6 +8,7 @@ from rest_framework import serializers
 
 ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 MAX_FILE_SIZE = 5 * 1024 * 1024
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 
 def validate_uploaded_file(uploaded_file):
@@ -37,5 +38,18 @@ def save_uploaded_pdf(uploaded_file, regno):
         raise serializers.ValidationError("File size must be 5MB or less.")
     filename = f"{uuid4().hex}{extension}"
     relative_path = os.path.join("student_uploads", regno, filename)
+    saved_path = default_storage.save(relative_path, uploaded_file)
+    return f"{settings.MEDIA_URL}{saved_path}"
+
+
+def save_faculty_profile_photo(uploaded_file, username):
+    extension = Path(uploaded_file.name).suffix.lower()
+    if extension not in IMAGE_EXTENSIONS:
+        raise serializers.ValidationError("Profile photo must be JPG, JPEG, or PNG.")
+    if uploaded_file.size > MAX_FILE_SIZE:
+        raise serializers.ValidationError("File size must be 5MB or less.")
+
+    filename = f"{uuid4().hex}{extension}"
+    relative_path = os.path.join("faculty_uploads", username, filename)
     saved_path = default_storage.save(relative_path, uploaded_file)
     return f"{settings.MEDIA_URL}{saved_path}"

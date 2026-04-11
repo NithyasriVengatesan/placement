@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import "../App.css";
 import PortalLayout from "./PortalLayout";
 import { getDepartmentContent } from "./departmentContent";
+import logo from "./logo.jpg";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 
@@ -120,7 +121,6 @@ function StudentDashboard({
       internships: internships.length,
       jobs: hirings.length,
       cgpa: studentProfile?.cgpa || "0.00",
-      eligibility: studentProfile?.eligibility || "Pending",
     }),
     [internships, hirings, studentProfile]
   );
@@ -139,6 +139,15 @@ function StudentDashboard({
 
     return buckets;
   }, [hirings]);
+
+  const studentDisplayName = `${studentProfile?.firstName || ""} ${studentProfile?.lastName || ""}`.trim()
+    || currentUser?.username
+    || "Student";
+  const studentAvatarSource =
+    studentProfile?.documents?.passportDocument &&
+    /\.(png|jpe?g)$/i.test(studentProfile.documents.passportDocument)
+      ? studentProfile.documents.passportDocument
+      : "";
 
   const renderPanel = () => {
     if (isLoading) {
@@ -264,10 +273,6 @@ function StudentDashboard({
                 <strong>{studentProfile.cgpa || "-"}</strong>
               </article>
               <article className="student-profile-card">
-                <span>Eligibility</span>
-                <strong>{studentProfile.eligibility || "-"}</strong>
-              </article>
-              <article className="student-profile-card">
                 <span>Primary Email</span>
                 <strong>{studentProfile.primaryEmail || "-"}</strong>
               </article>
@@ -313,10 +318,6 @@ function StudentDashboard({
             <article className="student-kpi-card">
               <span>CGPA</span>
               <strong>{metrics.cgpa}</strong>
-            </article>
-            <article className="student-kpi-card">
-              <span>Eligibility</span>
-              <strong>{metrics.eligibility}</strong>
             </article>
           </div>
         </section>
@@ -387,19 +388,42 @@ function StudentDashboard({
           </nav>
 
           <div className="admin-sidebar-footer">
-            <button type="button" className="admin-sidebar-profile-trigger">
-              <div className="admin-sidebar-avatar">
-                {String(currentUser?.username || "S").charAt(0).toUpperCase()}
+            <div className="student-sidebar-user-card">
+              <div className="student-sidebar-identity">
+                <div className="student-sidebar-profile-visual">
+                  {studentAvatarSource ? (
+                    <img
+                      src={studentAvatarSource}
+                      alt={studentDisplayName}
+                      className="student-sidebar-photo"
+                    />
+                  ) : (
+                    <div className="admin-sidebar-avatar student-sidebar-photo-fallback">
+                      {String(studentDisplayName || "S").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="student-sidebar-user-copy">
+                  <span className="admin-sidebar-profile-title">
+                    {studentDisplayName}
+                  </span>
+                  <span className="admin-sidebar-profile-subtitle">
+                    {studentProfile?.regno || currentUser?.username || ""}
+                  </span>
+                </div>
               </div>
-              <div className="admin-sidebar-profile-copy">
-                <span className="admin-sidebar-profile-title">
-                  {currentUser?.username || "Student"}
-                </span>
-                <span className="admin-sidebar-profile-subtitle">
-                  {studentProfile?.department || content.sidebarTitle}
-                </span>
+              <div className="student-sidebar-brand-card">
+                <img
+                  src={logo}
+                  alt="Ramco Institute of Technology"
+                  className="student-sidebar-brand-logo"
+                />
+                <div className="student-sidebar-brand-copy">
+                  <strong>RAMCO</strong>
+                  <span>{studentProfile?.department || content.sidebarTitle}</span>
+                </div>
               </div>
-            </button>
+            </div>
             <button type="button" className="admin-sidebar-logout" onClick={onLogout}>
               Log Out
             </button>
